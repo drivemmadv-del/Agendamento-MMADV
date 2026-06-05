@@ -69,9 +69,33 @@
     };
 
     const MONTHS = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
+
+    // Códigos de país (DDI) para telefone internacional
+    const COUNTRY_CODES = [
+      { code: "+55",  label: "🇧🇷 +55 Brasil" },
+      { code: "+351", label: "🇵🇹 +351 Portugal" },
+      { code: "+1",   label: "🇺🇸 +1 EUA / Canadá" },
+      { code: "+54",  label: "🇦🇷 +54 Argentina" },
+      { code: "+598", label: "🇺🇾 +598 Uruguai" },
+      { code: "+595", label: "🇵🇾 +595 Paraguai" },
+      { code: "+591", label: "🇧🇴 +591 Bolívia" },
+      { code: "+56",  label: "🇨🇱 +56 Chile" },
+      { code: "+57",  label: "🇨🇴 +57 Colômbia" },
+      { code: "+34",  label: "🇪🇸 +34 Espanha" },
+      { code: "+39",  label: "🇮🇹 +39 Itália" },
+      { code: "+33",  label: "🇫🇷 +33 França" },
+      { code: "+49",  label: "🇩🇪 +49 Alemanha" },
+      { code: "+44",  label: "🇬🇧 +44 Reino Unido" },
+      { code: "+41",  label: "🇨🇭 +41 Suíça" },
+      { code: "+81",  label: "🇯🇵 +81 Japão" },
+      { code: "+61",  label: "🇦🇺 +61 Austrália" },
+      { code: "+971", label: "🇦🇪 +971 Emirados Árabes" },
+    ];
+
     const EMPTY_FORM = {
       schedulerName: "", schedulerRole: "",
-      closer: "", clientName: "", clientPhone: "",
+      closer: "", clientName: "",
+      clientPhoneCountry: "+55", clientPhone: "",
       date: "", time: "", notes: "",
     };
 
@@ -170,14 +194,29 @@
           setFormErr("Preencha todos os campos marcados com *.");
           return;
         }
+        // Trava: 1 agendamento por horário por Closer (ignora cancelados)
+        const conflito = meetings.find(
+          (m) =>
+            m.closer === form.closer &&
+            m.date === form.date &&
+            m.time === form.time &&
+            m.status !== "cancelado"
+        );
+        if (conflito) {
+          setFormErr(`${form.closer} já tem uma reunião em ${fmtDate(form.date)} às ${form.time}. Escolha outro horário ou outro closer.`);
+          return;
+        }
         setSaving(true);
         try {
+          const telefone = form.clientPhone
+            ? `${form.clientPhoneCountry} ${form.clientPhone}`.trim()
+            : "";
           await db.collection("meetings").add({
             schedulerName: form.schedulerName,
             schedulerRole: form.schedulerRole,
             closer:        form.closer,
             clientName:    form.clientName,
-            clientPhone:   form.clientPhone,
+            clientPhone:   telefone,
             date:          form.date,
             time:          form.time,
             notes:         form.notes,
@@ -237,6 +276,21 @@
         ...s,
         total: meetings.filter((m) => m.schedulerName === s.name).length,
       }));
+
+      // Ranking: quem mais agendou (SDR + Social Seller)
+      const rankAgendadores = ALL_SCHEDULERS
+        .map((s) => ({ ...s, total: meetings.filter((m) => m.schedulerName === s.name).length }))
+        .sort((a, b) => b.total - a.total);
+
+      // Ranking: closers com mais reuniões realizadas
+      const rankClosers = CLOSERS
+        .map((name) => ({
+          name,
+          realizado: meetings.filter((m) => m.closer === name && m.status === "realizado").length,
+        }))
+        .sort((a, b) => b.realizado - a.realizado);
+
+      const medalha = (i) => (i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : `${i + 1}º`);
 
       if (loading) {
         return (
@@ -386,6 +440,65 @@
                   </div>
                 </div>
 
+                {/* ── RANKINGS ── */}
+                <div className="grid gap-5 md:grid-cols-2">
+                  {/* Ranking agendadores */}
+                  <div className="bg-white rounded-xl shadow-sm overflow-hidden">
+                    <div className="px-5 py-4 border-b border-gray-100 flex items-center gap-2">
+                      <span style={{ background: "#FBF3E3", color: "#8B6914", borderRadius: 6, padding: "3px 10px", fontSize: 11, fontWeight: 700 }}>RANKING</span>
+                      <span className="font-semibold text-sm" style={{ color: NAVY }}>🏆 Quem mais agendou</span>
+                    </div>
+                    <div className="p-2">
+                      {rankAgendadores.map((s, i) => {
+                        const max = rankAgendadores[0].total || 1;
+                        const pct = Math.round((s.total / max) * 100);
+                        return (
+                          <div key={s.name} className="flex items-center gap-3 px-3 py-2.5">
+                            <span style={{ fontSize: i < 3 ? 18 : 13, fontWeight: 800, color: i < 3 ? NAVY : "#9CA3AF", minWidth: 28, textAlign: "center" }}>{medalha(i)}</span>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center justify-between mb-1">
+                                <span className="font-semibold text-sm truncate" style={{ color: NAVY }}>{s.name} <span className="text-xs text-gray-400 font-normal">· {s.role}</span></span>
+                                <span className="font-black text-sm ml-2" style={{ color: NAVY }}>{s.total}</span>
+                              </div>
+                              <div style={{ height: 6, background: "#F3F4F6", borderRadius: 99, overflow: "hidden" }}>
+                                <div style={{ height: "100%", width: `${pct}%`, background: GOLD, borderRadius: 99, transition: "width 0.4s" }}></div>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Ranking closers por realizadas */}
+                  <div className="bg-white rounded-xl shadow-sm overflow-hidden">
+                    <div className="px-5 py-4 border-b border-gray-100 flex items-center gap-2">
+                      <span style={{ background: "#DCFCE7", color: "#15803D", borderRadius: 6, padding: "3px 10px", fontSize: 11, fontWeight: 700 }}>RANKING</span>
+                      <span className="font-semibold text-sm" style={{ color: NAVY }}>✅ Closers — reuniões realizadas</span>
+                    </div>
+                    <div className="p-2">
+                      {rankClosers.map((c, i) => {
+                        const max = rankClosers[0].realizado || 1;
+                        const pct = Math.round((c.realizado / max) * 100);
+                        return (
+                          <div key={c.name} className="flex items-center gap-3 px-3 py-2.5">
+                            <span style={{ fontSize: i < 3 ? 18 : 13, fontWeight: 800, color: i < 3 ? NAVY : "#9CA3AF", minWidth: 28, textAlign: "center" }}>{medalha(i)}</span>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center justify-between mb-1">
+                                <span className="font-semibold text-sm truncate" style={{ color: NAVY }}>{c.name}</span>
+                                <span className="font-black text-sm ml-2" style={{ color: "#15803D" }}>{c.realizado}</span>
+                              </div>
+                              <div style={{ height: 6, background: "#F3F4F6", borderRadius: 99, overflow: "hidden" }}>
+                                <div style={{ height: "100%", width: `${pct}%`, background: "#22C55E", borderRadius: 99, transition: "width 0.4s" }}></div>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+
                 <div className="bg-white rounded-xl shadow-sm overflow-hidden">
                   <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
                     <span className="font-semibold text-sm" style={{ color: NAVY }}>🕑 Últimos Agendamentos</span>
@@ -468,7 +581,17 @@
                     </div>
                     <div>
                       <label className={labelCls}>WhatsApp do Cliente</label>
-                      <input type="text" placeholder="(00) 00000-0000" value={form.clientPhone} onChange={(e) => setF("clientPhone", e.target.value)} className={inputCls} />
+                      <div className="flex gap-2">
+                        <select
+                          value={form.clientPhoneCountry}
+                          onChange={(e) => setF("clientPhoneCountry", e.target.value)}
+                          className="border border-gray-200 rounded-lg px-2 py-2.5 text-sm bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          style={{ maxWidth: 130 }}>
+                          {COUNTRY_CODES.map((c, i) => <option key={i} value={c.code}>{c.label}</option>)}
+                        </select>
+                        <input type="tel" placeholder="11 99999-9999" value={form.clientPhone}
+                          onChange={(e) => setF("clientPhone", e.target.value)} className={inputCls + " flex-1"} />
+                      </div>
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                       <div>
