@@ -70,6 +70,12 @@
 
     const MONTHS = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
 
+    // Tipo de atendimento
+    const TYPE_CONFIG = {
+      reuniao:  { label: "Reunião",  icon: "🤝", color: "#1F3864", bg: "#E8EDF6" },
+      consulta: { label: "Consulta", icon: "💬", color: "#8B6914", bg: "#FBF3E3" },
+    };
+
     // Códigos de país (DDI) para telefone internacional
     const COUNTRY_CODES = [
       { code: "+55",  label: "🇧🇷 +55 Brasil" },
@@ -96,13 +102,28 @@
       schedulerName: "", schedulerRole: "",
       closer: "", clientName: "",
       clientPhoneCountry: "+55", clientPhone: "",
-      date: "", time: "", notes: "",
+      date: "", time: "", notes: "", type: "reuniao",
     };
 
     function fmtDate(d) {
       if (!d) return "—";
       const [y, m, day] = d.split("-");
       return `${day}/${m}/${y}`;
+    }
+
+    // Segunda-feira da semana de uma data "YYYY-MM-DD"
+    function weekStart(dateStr) {
+      const d = new Date(dateStr + "T00:00:00");
+      const day = d.getDay();              // 0=Dom ... 6=Sáb
+      const diff = (day === 0 ? -6 : 1 - day);
+      d.setDate(d.getDate() + diff);
+      return d;
+    }
+    function weekLabel(monday) {
+      const end = new Date(monday);
+      end.setDate(end.getDate() + 6);
+      const f = (dt) => `${String(dt.getDate()).padStart(2,"0")}/${MONTHS[dt.getMonth()].toLowerCase()}`;
+      return `${f(monday)} – ${f(end)}`;
     }
 
     // ─── Ícones (SVG inline) ──────────────────────────────────────────
@@ -164,6 +185,7 @@
       const [fCloser, setFCloser] = useState("todos");
       const [fStatus, setFStatus] = useState("todos");
       const [fSched,  setFSched]  = useState("todos");
+      const [fType,   setFType]   = useState("todos");
       const [sortBy,  setSortBy]  = useState("date_asc");
 
       // Listener em tempo real
@@ -220,6 +242,7 @@
             date:          form.date,
             time:          form.time,
             notes:         form.notes,
+            type:          form.type || "reuniao",
             status:        "agendado",
             createdAt:     new Date().toISOString(),
           });
@@ -249,7 +272,8 @@
         .filter((m) =>
           (fCloser === "todos" || m.closer === fCloser) &&
           (fStatus === "todos" || m.status === fStatus) &&
-          (fSched  === "todos" || m.schedulerName === fSched)
+          (fSched  === "todos" || m.schedulerName === fSched) &&
+          (fType   === "todos" || (m.type || "reuniao") === fType)
         )
         .sort((a, b) => {
           if (sortBy === "date_asc")  return (a.date + a.time).localeCompare(b.date + b.time);
@@ -291,6 +315,21 @@
         .sort((a, b) => b.realizado - a.realizado);
 
       const medalha = (i) => (i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : `${i + 1}º`);
+
+      // Métrica semanal (agrupa pela segunda-feira da semana da data do agendamento)
+      const weekMap = {};
+      meetings.forEach((m) => {
+        if (!m.date) return;
+        const monday = weekStart(m.date);
+        const key = monday.toISOString().slice(0, 10);
+        if (!weekMap[key]) weekMap[key] = { key, monday, total: 0, realizado: 0, reuniao: 0, consulta: 0 };
+        weekMap[key].total++;
+        if (m.status === "realizado") weekMap[key].realizado++;
+        if ((m.type || "reuniao") === "consulta") weekMap[key].consulta++;
+        else weekMap[key].reuniao++;
+      });
+      const weekStats = Object.values(weekMap).sort((a, b) => b.key.localeCompare(a.key)).slice(0, 8);
+      const weekMax = weekStats.reduce((mx, w) => Math.max(mx, w.total), 0) || 1;
 
       if (loading) {
         return (
@@ -383,6 +422,39 @@
                       </div>
                     </div>
                   ))}
+                </div>
+
+                {/* ── MÉTRICA SEMANAL ── */}
+                <div className="bg-white rounded-xl shadow-sm overflow-hidden">
+                  <div className="px-5 py-4 border-b border-gray-100 flex items-center gap-2">
+                    <span style={{ background: "#E8EDF6", color: NAVY, borderRadius: 6, padding: "3px 10px", fontSize: 11, fontWeight: 700 }}>SEMANAL</span>
+                    <span className="font-semibold text-sm" style={{ color: NAVY }}>📅 Agendamentos por Semana</span>
+                  </div>
+                  <div className="p-5 space-y-3">
+                    {weekStats.length === 0 && (
+                      <div className="text-center text-gray-400 text-sm py-6">Nenhum agendamento ainda</div>
+                    )}
+                    {weekStats.map((w) => {
+                      const pct = Math.round((w.total / weekMax) * 100);
+                      return (
+                        <div key={w.key} className="flex items-center gap-4">
+                          <div className="text-xs font-bold" style={{ color: NAVY, minWidth: 110 }}>{weekLabel(w.monday)}</div>
+                          <div className="flex-1">
+                            <div style={{ height: 24, background: "#F3F4F6", borderRadius: 8, overflow: "hidden", position: "relative" }}>
+                              <div style={{ height: "100%", width: `${pct}%`, background: NAVY, borderRadius: 8, transition: "width 0.4s", minWidth: w.total > 0 ? 28 : 0, display: "flex", alignItems: "center", justifyContent: "flex-end" }}>
+                                {w.total > 0 && <span style={{ color: "#fff", fontSize: 12, fontWeight: 800, paddingRight: 8 }}>{w.total}</span>}
+                              </div>
+                            </div>
+                          </div>
+                          <div className="flex gap-3 text-xs shrink-0" style={{ minWidth: 200 }}>
+                            <span style={{ color: "#15803D" }}>✅ {w.realizado} realiz.</span>
+                            <span style={{ color: "#6B7280" }}>🤝 {w.reuniao}</span>
+                            <span style={{ color: "#8B6914" }}>💬 {w.consulta}</span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
 
                 <div className="grid gap-5 lg:grid-cols-[1.5fr_1fr]">
@@ -513,7 +585,7 @@
                     <div key={m.id} className="px-5 py-3.5 border-b border-gray-50 last:border-0 flex items-center justify-between">
                       <div>
                         <span className="font-semibold text-sm" style={{ color: NAVY }}>{m.clientName}</span>
-                        <span className="text-xs text-gray-400 ml-3">{fmtDate(m.date)} {m.time} · Closer: {m.closer} · {m.schedulerName}</span>
+                        <span className="text-xs text-gray-400 ml-3">{TYPE_CONFIG[m.type || "reuniao"].icon} {fmtDate(m.date)} {m.time} · Closer: {m.closer} · {m.schedulerName}</span>
                       </div>
                       <StatusBadge status={m.status} />
                     </div>
@@ -551,6 +623,28 @@
                   )}
 
                   <div className="px-8 py-7 space-y-5">
+                    {/* Tipo: Reunião ou Consulta */}
+                    <div>
+                      <label className={labelCls}>Tipo de atendimento *</label>
+                      <div className="grid grid-cols-2 gap-3">
+                        {Object.entries(TYPE_CONFIG).map(([key, t]) => {
+                          const active = form.type === key;
+                          return (
+                            <button key={key} type="button" onClick={() => setF("type", key)}
+                              className="flex items-center justify-center gap-2 py-3 rounded-xl font-bold text-sm transition-all"
+                              style={{
+                                border: active ? `2px solid ${t.color}` : "2px solid #E5E7EB",
+                                background: active ? t.bg : "#FAFAFA",
+                                color: active ? t.color : "#9CA3AF",
+                                cursor: "pointer",
+                              }}>
+                              <span style={{ fontSize: 18 }}>{t.icon}</span> {t.label}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
                     <div className="grid grid-cols-2 gap-4">
                       <div>
                         <label className={labelCls}>Agendador *</label>
@@ -623,8 +717,9 @@
             {tab === "agenda" && (
               <div className="space-y-5">
                 <div className="bg-white rounded-xl shadow-sm p-5">
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
                     {[
+                      { label: "Tipo", val: fType, set: setFType, opts: [["todos","Todos"],["reuniao","Reunião"],["consulta","Consulta"]] },
                       { label: "Closer", val: fCloser, set: setFCloser, opts: [["todos","Todos"], ...CLOSERS.map((c) => [c, c])] },
                       { label: "Status", val: fStatus, set: setFStatus, opts: [["todos","Todos"],["agendado","Agendado"],["realizado","Realizado"],["cancelado","Cancelado"],["noshow","No-show"]] },
                       { label: "Agendador", val: fSched, set: setFSched, opts: [["todos","Todos"], ...ALL_SCHEDULERS.map((s) => [s.name, `${s.name} (${s.role})`])] },
@@ -663,6 +758,14 @@
                           <div className="flex items-center gap-2.5 mb-2 flex-wrap">
                             <span className="font-black text-base" style={{ color: NAVY }}>{m.clientName}</span>
                             <StatusBadge status={m.status} />
+                            {(() => {
+                              const t = TYPE_CONFIG[m.type || "reuniao"];
+                              return (
+                                <span style={{ background: t.bg, color: t.color, borderRadius: 99, padding: "2px 10px", fontSize: 11, fontWeight: 700, whiteSpace: "nowrap" }}>
+                                  {t.icon} {t.label}
+                                </span>
+                              );
+                            })()}
                           </div>
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1">
                             <span className="flex items-center gap-1.5 text-xs text-gray-500"><IconUser size={11} /> Closer: <strong style={{ color: NAVY, marginLeft: 2 }}>{m.closer}</strong></span>
