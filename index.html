@@ -125,6 +125,11 @@
       const f = (dt) => `${String(dt.getDate()).padStart(2,"0")}/${MONTHS[dt.getMonth()].toLowerCase()}`;
       return `${f(monday)} – ${f(end)}`;
     }
+    const MONTHS_FULL = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
+    function monthLabel(key) {
+      const [y, m] = key.split("-");
+      return `${MONTHS_FULL[parseInt(m) - 1]}/${y}`;
+    }
 
     // ─── Ícones (SVG inline) ──────────────────────────────────────────
     function Svg({ children, size = 14 }) {
@@ -187,6 +192,12 @@
       const [fSched,  setFSched]  = useState("todos");
       const [fType,   setFType]   = useState("todos");
       const [sortBy,  setSortBy]  = useState("date_asc");
+
+      // Período dos rankings
+      const hoje = new Date().toISOString().slice(0, 10);
+      const [rankPeriod, setRankPeriod] = useState("semana"); // semana | mes | total
+      const [rankWeek,  setRankWeek]  = useState(weekStart(hoje).toISOString().slice(0, 10));
+      const [rankMonth, setRankMonth] = useState(hoje.slice(0, 7));
 
       // Listener em tempo real
       useEffect(() => {
@@ -301,16 +312,40 @@
         total: meetings.filter((m) => m.schedulerName === s.name).length,
       }));
 
-      // Ranking: quem mais agendou (SDR + Social Seller)
+      // Listas de meses e semanas disponíveis (a partir dos dados)
+      const datedMeetings = meetings.filter((m) => m.date);
+      const availableMonths = [...new Set(datedMeetings.map((m) => m.date.slice(0, 7)))].sort().reverse();
+      const availableWeeks  = [...new Set(datedMeetings.map((m) => weekStart(m.date).toISOString().slice(0, 10)))].sort().reverse();
+
+      // Garante que o período atual apareça na lista mesmo sem dados
+      if (!availableMonths.includes(rankMonth)) availableMonths.unshift(rankMonth);
+      if (!availableWeeks.includes(rankWeek))   availableWeeks.unshift(rankWeek);
+
+      // Filtra agendamentos pelo período do ranking selecionado
+      function inRankPeriod(m) {
+        if (!m.date) return false;
+        if (rankPeriod === "total")  return true;
+        if (rankPeriod === "mes")    return m.date.slice(0, 7) === rankMonth;
+        if (rankPeriod === "semana") return weekStart(m.date).toISOString().slice(0, 10) === rankWeek;
+        return true;
+      }
+      const periodMeetings = meetings.filter(inRankPeriod);
+
+      const periodoTexto =
+        rankPeriod === "total"  ? "Total geral" :
+        rankPeriod === "mes"    ? monthLabel(rankMonth) :
+        weekLabel(new Date(rankWeek + "T00:00:00"));
+
+      // Ranking: quem mais agendou (SDR + Social Seller) no período
       const rankAgendadores = ALL_SCHEDULERS
-        .map((s) => ({ ...s, total: meetings.filter((m) => m.schedulerName === s.name).length }))
+        .map((s) => ({ ...s, total: periodMeetings.filter((m) => m.schedulerName === s.name).length }))
         .sort((a, b) => b.total - a.total);
 
-      // Ranking: closers com mais reuniões realizadas
+      // Ranking: closers com mais reuniões realizadas no período
       const rankClosers = CLOSERS
         .map((name) => ({
           name,
-          realizado: meetings.filter((m) => m.closer === name && m.status === "realizado").length,
+          realizado: periodMeetings.filter((m) => m.closer === name && m.status === "realizado").length,
         }))
         .sort((a, b) => b.realizado - a.realizado);
 
@@ -513,6 +548,40 @@
                 </div>
 
                 {/* ── RANKINGS ── */}
+                <div className="bg-white rounded-xl shadow-sm p-4 flex flex-wrap items-center gap-3">
+                  <span className="font-semibold text-sm mr-1" style={{ color: NAVY }}>🏅 Ranking por período:</span>
+                  <div className="flex gap-1 bg-gray-100 rounded-lg p-1">
+                    {[["semana","Semana"],["mes","Mês"],["total","Total"]].map(([v, l]) => (
+                      <button key={v} onClick={() => setRankPeriod(v)}
+                        style={{
+                          background: rankPeriod === v ? NAVY : "transparent",
+                          color: rankPeriod === v ? "#fff" : "#6B7280",
+                          border: "none", borderRadius: 6, padding: "6px 16px",
+                          fontSize: 13, fontWeight: 700, cursor: "pointer",
+                        }}>
+                        {l}
+                      </button>
+                    ))}
+                  </div>
+                  {rankPeriod === "semana" && (
+                    <select value={rankWeek} onChange={(e) => setRankWeek(e.target.value)}
+                      className="border border-gray-200 rounded-lg px-3 py-2 text-sm bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                      {availableWeeks.map((w) => (
+                        <option key={w} value={w}>{weekLabel(new Date(w + "T00:00:00"))}</option>
+                      ))}
+                    </select>
+                  )}
+                  {rankPeriod === "mes" && (
+                    <select value={rankMonth} onChange={(e) => setRankMonth(e.target.value)}
+                      className="border border-gray-200 rounded-lg px-3 py-2 text-sm bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                      {availableMonths.map((mo) => (
+                        <option key={mo} value={mo}>{monthLabel(mo)}</option>
+                      ))}
+                    </select>
+                  )}
+                  <span className="text-xs text-gray-400 ml-auto">Exibindo: <strong style={{ color: NAVY }}>{periodoTexto}</strong></span>
+                </div>
+
                 <div className="grid gap-5 md:grid-cols-2">
                   {/* Ranking agendadores */}
                   <div className="bg-white rounded-xl shadow-sm overflow-hidden">
