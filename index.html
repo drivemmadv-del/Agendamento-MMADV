@@ -98,12 +98,15 @@
       { code: "+971", label: "🇦🇪 +971 Emirados Árabes" },
     ];
 
-    const EMPTY_FORM = {
-      schedulerName: "", schedulerRole: "",
-      closer: "", clientName: "",
-      clientPhoneCountry: "+55", clientPhone: "",
-      date: "", time: "", notes: "", type: "reuniao",
-    };
+    function getEmptyForm() {
+      return {
+        schedulerName: "", schedulerRole: "",
+        closer: "", clientName: "",
+        clientPhoneCountry: "+55", clientPhone: "",
+        bookingDate: new Date().toISOString().slice(0, 10),
+        date: "", time: "", notes: "", type: "reuniao",
+      };
+    }
 
     function fmtDate(d) {
       if (!d) return "—";
@@ -129,6 +132,10 @@
     function monthLabel(key) {
       const [y, m] = key.split("-");
       return `${MONTHS_FULL[parseInt(m) - 1]}/${y}`;
+    }
+    // Data do agendamento, com fallback para registros antigos
+    function bookingOf(m) {
+      return m.bookingDate || (m.createdAt ? m.createdAt.slice(0, 10) : m.date) || "";
     }
 
     // ─── Ícones (SVG inline) ──────────────────────────────────────────
@@ -185,7 +192,7 @@
       const [formOk, setFormOk]     = useState(false);
       const [formErr, setFormErr]   = useState("");
       const [saving, setSaving]     = useState(false);
-      const [form, setForm]         = useState(EMPTY_FORM);
+      const [form, setForm]         = useState(getEmptyForm());
 
       const [fCloser, setFCloser] = useState("todos");
       const [fStatus, setFStatus] = useState("todos");
@@ -195,7 +202,8 @@
 
       // Período dos rankings
       const hoje = new Date().toISOString().slice(0, 10);
-      const [rankPeriod, setRankPeriod] = useState("semana"); // semana | mes | total
+      const [rankPeriod, setRankPeriod]   = useState("semana"); // semana | mes | total
+      const [rankDateRef, setRankDateRef] = useState("reuniao"); // reuniao | agendamento
       const [rankWeek,  setRankWeek]  = useState(weekStart(hoje).toISOString().slice(0, 10));
       const [rankMonth, setRankMonth] = useState(hoje.slice(0, 7));
 
@@ -223,7 +231,7 @@
 
       async function handleSubmit() {
         setFormErr("");
-        if (!form.schedulerName || !form.closer || !form.clientName || !form.date || !form.time) {
+        if (!form.schedulerName || !form.closer || !form.clientName || !form.bookingDate || !form.date || !form.time) {
           setFormErr("Preencha todos os campos marcados com *.");
           return;
         }
@@ -250,6 +258,7 @@
             closer:        form.closer,
             clientName:    form.clientName,
             clientPhone:   telefone,
+            bookingDate:   form.bookingDate || new Date().toISOString().slice(0, 10),
             date:          form.date,
             time:          form.time,
             notes:         form.notes,
@@ -257,7 +266,7 @@
             status:        "agendado",
             createdAt:     new Date().toISOString(),
           });
-          setForm(EMPTY_FORM);
+          setForm(getEmptyForm());
           setFormOk(true);
           setTimeout(() => { setFormOk(false); setTab("agenda"); }, 1400);
         } catch (err) {
@@ -312,10 +321,13 @@
         total: meetings.filter((m) => m.schedulerName === s.name).length,
       }));
 
-      // Listas de meses e semanas disponíveis (a partir dos dados)
-      const datedMeetings = meetings.filter((m) => m.date);
-      const availableMonths = [...new Set(datedMeetings.map((m) => m.date.slice(0, 7)))].sort().reverse();
-      const availableWeeks  = [...new Set(datedMeetings.map((m) => weekStart(m.date).toISOString().slice(0, 10)))].sort().reverse();
+      // Data de referência do ranking (reunião ou agendamento)
+      const refDate = (m) => (rankDateRef === "agendamento" ? bookingOf(m) : m.date);
+
+      // Listas de meses e semanas disponíveis (conforme a referência escolhida)
+      const datedMeetings = meetings.filter((m) => refDate(m));
+      const availableMonths = [...new Set(datedMeetings.map((m) => refDate(m).slice(0, 7)))].sort().reverse();
+      const availableWeeks  = [...new Set(datedMeetings.map((m) => weekStart(refDate(m)).toISOString().slice(0, 10)))].sort().reverse();
 
       // Garante que o período atual apareça na lista mesmo sem dados
       if (!availableMonths.includes(rankMonth)) availableMonths.unshift(rankMonth);
@@ -323,10 +335,11 @@
 
       // Filtra agendamentos pelo período do ranking selecionado
       function inRankPeriod(m) {
-        if (!m.date) return false;
+        const d = refDate(m);
+        if (!d) return false;
         if (rankPeriod === "total")  return true;
-        if (rankPeriod === "mes")    return m.date.slice(0, 7) === rankMonth;
-        if (rankPeriod === "semana") return weekStart(m.date).toISOString().slice(0, 10) === rankWeek;
+        if (rankPeriod === "mes")    return d.slice(0, 7) === rankMonth;
+        if (rankPeriod === "semana") return weekStart(d).toISOString().slice(0, 10) === rankWeek;
         return true;
       }
       const periodMeetings = meetings.filter(inRankPeriod);
@@ -549,7 +562,20 @@
 
                 {/* ── RANKINGS ── */}
                 <div className="bg-white rounded-xl shadow-sm p-4 flex flex-wrap items-center gap-3">
-                  <span className="font-semibold text-sm mr-1" style={{ color: NAVY }}>🏅 Ranking por período:</span>
+                  <span className="font-semibold text-sm mr-1" style={{ color: NAVY }}>🏅 Ranking por:</span>
+                  <div className="flex gap-1 bg-gray-100 rounded-lg p-1">
+                    {[["reuniao","📆 Dia da reunião"],["agendamento","✍️ Dia do agendamento"]].map(([v, l]) => (
+                      <button key={v} onClick={() => setRankDateRef(v)}
+                        style={{
+                          background: rankDateRef === v ? GOLD : "transparent",
+                          color: rankDateRef === v ? NAVY : "#6B7280",
+                          border: "none", borderRadius: 6, padding: "6px 14px",
+                          fontSize: 13, fontWeight: 700, cursor: "pointer",
+                        }}>
+                        {l}
+                      </button>
+                    ))}
+                  </div>
                   <div className="flex gap-1 bg-gray-100 rounded-lg p-1">
                     {[["semana","Semana"],["mes","Mês"],["total","Total"]].map(([v, l]) => (
                       <button key={v} onClick={() => setRankPeriod(v)}
@@ -579,7 +605,9 @@
                       ))}
                     </select>
                   )}
-                  <span className="text-xs text-gray-400 ml-auto">Exibindo: <strong style={{ color: NAVY }}>{periodoTexto}</strong></span>
+                  <span className="text-xs text-gray-400 ml-auto">
+                    {rankDateRef === "agendamento" ? "Por dia do agendamento" : "Por dia da reunião"} · <strong style={{ color: NAVY }}>{periodoTexto}</strong>
+                  </span>
                 </div>
 
                 <div className="grid gap-5 md:grid-cols-2">
@@ -756,9 +784,14 @@
                           onChange={(e) => setF("clientPhone", e.target.value)} className={inputCls + " flex-1"} />
                       </div>
                     </div>
+                    <div>
+                      <label className={labelCls}>Data do agendamento *</label>
+                      <input type="date" value={form.bookingDate} onChange={(e) => setF("bookingDate", e.target.value)} className={inputCls} />
+                      <div className="mt-1 text-xs text-gray-400">Dia em que a reunião foi marcada</div>
+                    </div>
                     <div className="grid grid-cols-2 gap-4">
                       <div>
-                        <label className={labelCls}>Data *</label>
+                        <label className={labelCls}>Data da reunião *</label>
                         <input type="date" value={form.date} onChange={(e) => setF("date", e.target.value)} className={inputCls} />
                       </div>
                       <div>
@@ -839,6 +872,7 @@
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1">
                             <span className="flex items-center gap-1.5 text-xs text-gray-500"><IconUser size={11} /> Closer: <strong style={{ color: NAVY, marginLeft: 2 }}>{m.closer}</strong></span>
                             <span className="flex items-center gap-1.5 text-xs text-gray-500"><IconClock size={11} /> Por: <strong style={{ color: NAVY, marginLeft: 2 }}>{m.schedulerName}</strong> <span className="text-gray-400 ml-1">({m.schedulerRole})</span></span>
+                            <span className="flex items-center gap-1.5 text-xs text-gray-500"><IconCalendar size={11} /> Agendado em: <strong style={{ color: NAVY, marginLeft: 2 }}>{fmtDate(bookingOf(m))}</strong></span>
                             {m.clientPhone && <span className="flex items-center gap-1.5 text-xs text-gray-500"><IconPhone size={11} /> {m.clientPhone}</span>}
                           </div>
                           {m.notes && (
