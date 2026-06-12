@@ -164,6 +164,7 @@
     const IconWifiOff  = (p) => <Svg {...p}><line x1="1" y1="1" x2="23" y2="23"/><path d="M16.72 11.06A10.94 10.94 0 0 1 19 12.55"/><path d="M5 12.55a10.94 10.94 0 0 1 5.17-2.39"/><path d="M10.71 5.05A16 16 0 0 1 22.58 9"/><path d="M1.42 9a15.91 15.91 0 0 1 4.7-2.88"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><line x1="12" y1="20" x2="12.01" y2="20"/></Svg>;
     const IconRefresh  = (p) => <Svg {...p}><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></Svg>;
     const IconDownload = (p) => <Svg {...p}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></Svg>;
+    const IconEdit     = (p) => <Svg {...p}><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></Svg>;
 
     // ─── Componentes pequenos ─────────────────────────────────────────
     function StatusBadge({ status }) {
@@ -216,6 +217,10 @@
       const [reschedId,   setReschedId]   = useState(null);
       const [reschedDate, setReschedDate] = useState("");
       const [reschedTime, setReschedTime] = useState("");
+
+      // Edição completa (qual card está em edição + dados temporários)
+      const [editId, setEditId]     = useState(null);
+      const [editForm, setEditForm] = useState(null);
 
       // Listener em tempo real
       useEffect(() => {
@@ -359,6 +364,64 @@
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, "Agendamentos");
         XLSX.writeFile(wb, `MMADV_Agendamentos_${new Date().toISOString().slice(0, 10)}.xlsx`);
+      }
+
+      // Abre a edição completa de um agendamento
+      function abrirEditar(m) {
+        setReschedId(null);
+        setEditId(m.id);
+        setEditForm({
+          schedulerName: m.schedulerName || "",
+          schedulerRole: m.schedulerRole || "",
+          closer: m.closer || "",
+          clientName: m.clientName || "",
+          clientPhoneCountry: (m.clientPhone && m.clientPhone.startsWith("+")) ? m.clientPhone.split(" ")[0] : "+55",
+          clientPhone: (m.clientPhone && m.clientPhone.startsWith("+")) ? m.clientPhone.split(" ").slice(1).join(" ") : (m.clientPhone || ""),
+          bookingDate: bookingOf(m),
+          date: m.date || "",
+          time: m.time || "",
+          notes: m.notes || "",
+          type: m.type || "reuniao",
+        });
+      }
+      function setEF(key, val) { setEditForm((f) => ({ ...f, [key]: val })); }
+
+      async function salvarEdicao(m) {
+        const f = editForm;
+        if (!f.schedulerName || !f.closer || !f.clientName || !f.bookingDate || !f.date || !f.time) {
+          alert("Preencha todos os campos obrigatórios (*).");
+          return;
+        }
+        // Trava: 1 reunião por horário por Closer (ignora este próprio e cancelados)
+        const conflito = meetings.find(
+          (x) =>
+            x.id !== m.id &&
+            x.closer === f.closer &&
+            x.date === f.date &&
+            x.time === f.time &&
+            x.status !== "cancelado"
+        );
+        if (conflito) {
+          alert(`${f.closer} já tem uma reunião em ${fmtDate(f.date)} às ${f.time}. Escolha outro horário ou closer.`);
+          return;
+        }
+        const telefone = f.clientPhone ? `${f.clientPhoneCountry} ${f.clientPhone}`.trim() : "";
+        try {
+          await db.collection("meetings").doc(m.id).update({
+            schedulerName: f.schedulerName,
+            schedulerRole: f.schedulerRole,
+            closer: f.closer,
+            clientName: f.clientName,
+            clientPhone: telefone,
+            bookingDate: f.bookingDate,
+            date: f.date,
+            time: f.time,
+            notes: f.notes,
+            type: f.type,
+          });
+          setEditId(null);
+          setEditForm(null);
+        } catch (err) { console.error(err); alert("Erro ao salvar a edição."); }
       }
 
       const filtered = meetings
@@ -974,6 +1037,11 @@
                             <option value="cancelado">Cancelado</option>
                             <option value="noshow">No-show</option>
                           </select>
+                          <button onClick={() => (editId === m.id ? (setEditId(null), setEditForm(null)) : abrirEditar(m))}
+                            className="flex items-center justify-center gap-1 border rounded-lg px-2 py-1.5 text-xs font-semibold hover:bg-blue-50"
+                            style={{ borderColor: "#93C5FD", color: "#1D4ED8", background: editId === m.id ? "#DBEAFE" : "none", cursor: "pointer" }}>
+                            <IconEdit size={11} /> Editar
+                          </button>
                           <button onClick={() => (reschedId === m.id ? setReschedId(null) : abrirReagendar(m))}
                             className="flex items-center justify-center gap-1 border rounded-lg px-2 py-1.5 text-xs font-semibold hover:bg-amber-50"
                             style={{ borderColor: "#FCD34D", color: "#B45309", background: reschedId === m.id ? "#FEF3C7" : "none", cursor: "pointer" }}>
@@ -1017,6 +1085,97 @@
                                 </button>
                               </div>
                               <div className="mt-2 text-xs text-gray-400">A reunião volta para o status "Agendado" na nova data.</div>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Painel de edição completa */}
+                        {editId === m.id && editForm && (
+                          <div className="px-5 pb-5 pt-1">
+                            <div className="rounded-xl p-4" style={{ background: "#EFF6FF", border: "1px solid #93C5FD" }}>
+                              <div className="flex items-center gap-2 mb-4 text-sm font-bold" style={{ color: "#1D4ED8" }}>
+                                <IconEdit size={14} /> Editar agendamento de {m.clientName}
+                              </div>
+
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                  <label className={labelCls}>Tipo *</label>
+                                  <div className="flex gap-2">
+                                    {Object.entries(TYPE_CONFIG).map(([key, t]) => {
+                                      const active = editForm.type === key;
+                                      return (
+                                        <button key={key} type="button" onClick={() => setEF("type", key)}
+                                          className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg font-bold text-xs"
+                                          style={{ border: active ? `2px solid ${t.color}` : "2px solid #E5E7EB", background: active ? t.bg : "#fff", color: active ? t.color : "#9CA3AF", cursor: "pointer" }}>
+                                          {t.icon} {t.label}
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                                <div>
+                                  <label className={labelCls}>Closer *</label>
+                                  <select value={editForm.closer} onChange={(e) => setEF("closer", e.target.value)} className={inputCls + " bg-white"}>
+                                    <option value="">Selecione...</option>
+                                    {CLOSERS.map((c) => <option key={c} value={c}>{c}</option>)}
+                                  </select>
+                                </div>
+                                <div>
+                                  <label className={labelCls}>Agendador *</label>
+                                  <select value={editForm.schedulerName}
+                                    onChange={(e) => { const n = e.target.value; const s = ALL_SCHEDULERS.find((x) => x.name === n); setEditForm((f) => ({ ...f, schedulerName: n, schedulerRole: s ? s.role : "" })); }}
+                                    className={inputCls + " bg-white"}>
+                                    <option value="">Selecione...</option>
+                                    <optgroup label="SDR">{TEAM.SDR.map((n) => <option key={n} value={n}>{n}</option>)}</optgroup>
+                                    <optgroup label="Social Seller">{TEAM["Social Seller"].map((n) => <option key={n} value={n}>{n}</option>)}</optgroup>
+                                  </select>
+                                </div>
+                                <div>
+                                  <label className={labelCls}>Nome do Cliente *</label>
+                                  <input type="text" value={editForm.clientName} onChange={(e) => setEF("clientName", e.target.value)} className={inputCls + " bg-white"} />
+                                </div>
+                                <div className="md:col-span-2">
+                                  <label className={labelCls}>WhatsApp do Cliente</label>
+                                  <div className="flex gap-2">
+                                    <select value={editForm.clientPhoneCountry} onChange={(e) => setEF("clientPhoneCountry", e.target.value)}
+                                      className="border border-gray-200 rounded-lg px-2 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500" style={{ maxWidth: 130 }}>
+                                      {COUNTRY_CODES.map((c, i) => <option key={i} value={c.code}>{c.label}</option>)}
+                                    </select>
+                                    <input type="tel" value={editForm.clientPhone} onChange={(e) => setEF("clientPhone", e.target.value)} className={inputCls + " bg-white flex-1"} />
+                                  </div>
+                                </div>
+                                <div>
+                                  <label className={labelCls}>Data do agendamento *</label>
+                                  <input type="date" value={editForm.bookingDate} onChange={(e) => setEF("bookingDate", e.target.value)} className={inputCls + " bg-white"} />
+                                </div>
+                                <div className="grid grid-cols-2 gap-3">
+                                  <div>
+                                    <label className={labelCls}>Data da reunião *</label>
+                                    <input type="date" value={editForm.date} onChange={(e) => setEF("date", e.target.value)} className={inputCls + " bg-white"} />
+                                  </div>
+                                  <div>
+                                    <label className={labelCls}>Horário *</label>
+                                    <input type="time" value={editForm.time} onChange={(e) => setEF("time", e.target.value)} className={inputCls + " bg-white"} />
+                                  </div>
+                                </div>
+                                <div className="md:col-span-2">
+                                  <label className={labelCls}>Observações</label>
+                                  <textarea value={editForm.notes} onChange={(e) => setEF("notes", e.target.value)} rows={2} className={inputCls + " bg-white"} style={{ resize: "vertical" }}></textarea>
+                                </div>
+                              </div>
+
+                              <div className="flex gap-2 mt-4">
+                                <button onClick={() => salvarEdicao(m)}
+                                  className="flex items-center gap-1.5 px-5 py-2 rounded-lg text-sm font-bold text-white"
+                                  style={{ background: "#1D4ED8", border: "none", cursor: "pointer" }}>
+                                  <IconCheck size={13} /> Salvar alterações
+                                </button>
+                                <button onClick={() => { setEditId(null); setEditForm(null); }}
+                                  className="px-5 py-2 rounded-lg text-sm font-semibold"
+                                  style={{ border: "1px solid #E5E7EB", color: "#6B7280", background: "#fff", cursor: "pointer" }}>
+                                  Cancelar
+                                </button>
+                              </div>
                             </div>
                           </div>
                         )}
