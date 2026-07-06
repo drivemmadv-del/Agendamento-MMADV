@@ -1,1220 +1,1597 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>MMADV — Agendamentos Comerciais</title>
-  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='16' fill='%231F3864'/><text y='.9em' font-size='60' x='50%' text-anchor='middle' fill='%23C5A24A' font-weight='bold'>M</text></svg>" />
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="MMADV — Sistema de Controle de Ponto">
+  <meta name="theme-color" content="#1F3864">
+  <title>MMADV — Controle de Ponto</title>
 
-  <!-- Tailwind CSS -->
-  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- ✅ FIX 1: Favicon inline — elimina o erro 404 /favicon.ico -->
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%231F3864'/%3E%3Ctext x='16' y='23' font-family='Arial%2Csans-serif' font-size='13' font-weight='900' fill='%23C5A24A' text-anchor='middle'%3EMM%3C/text%3E%3C/svg%3E">
+  <link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%231F3864'/%3E%3Ctext x='16' y='23' font-family='Arial%2Csans-serif' font-size='13' font-weight='900' fill='%23C5A24A' text-anchor='middle'%3EMM%3C/text%3E%3C/svg%3E">
 
-  <!-- React -->
-  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-
-  <!-- Babel (transforma o JSX no navegador) -->
-  <script src="https://unpkg.com/@babel/standalone@7.25.6/babel.min.js"></script>
-
-  <!-- Firebase -->
+  <!-- Firebase (mesmo projeto do Agendamento — banco compartilhado entre dispositivos) -->
   <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-auth-compat.js"></script>
 
-  <!-- SheetJS (exportação Excel) -->
-  <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
-
   <style>
-    body { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; }
+    :root {
+      --navy:       #1F3864;
+      --navy-hover: #2A4A82;
+      --gold:       #C5A24A;
+      --gold-hover: #D4B76A;
+      --white:      #FFFFFF;
+      --bg:         #F5F7FA;
+      --gray-100:   #F9FAFB;
+      --gray-200:   #E5E7EB;
+      --gray-300:   #D1D5DB;
+      --gray-500:   #6B7280;
+      --gray-700:   #374151;
+      --gray-900:   #111827;
+      --green:      #1BAF7A;
+      --green-bg:   #E0F5EC;
+      --red:        #E34948;
+      --red-bg:     #FDEEEC;
+      --amber:      #D48000;
+      --amber-bg:   #FEF3D0;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--gray-900);
+      min-height: 100vh;
+    }
+
+    .hidden { display: none !important; }
+
+    /* ─────────────── LOGIN ─────────────── */
+    #loginPage {
+      min-height: 100vh;
+      background: linear-gradient(145deg, var(--navy) 0%, #162b52 60%, #0e1e3a 100%);
+      display: flex; align-items: center; justify-content: center; padding: 1.5rem;
+    }
+    .login-card {
+      background: var(--white); border-radius: 20px;
+      padding: 2.5rem 2rem 2rem; width: 100%; max-width: 380px;
+      box-shadow: 0 24px 80px rgba(0,0,0,0.35);
+    }
+    .login-logo { text-align: center; margin-bottom: 2rem; }
+    .login-logo .brand    { font-size: 1.25rem; font-weight: 800; color: var(--navy); letter-spacing: 1px; }
+    .login-logo .gold-bar { width: 48px; height: 3px; background: var(--gold); margin: .5rem auto; border-radius: 2px; }
+    .login-logo .sub      { font-size: .72rem; color: var(--gold); letter-spacing: 3px; text-transform: uppercase; }
+    .login-logo .tagline  { font-size: .8rem; color: var(--gray-500); margin-top: .5rem; }
+    .login-card h2        { font-size: 1rem; color: var(--gray-700); text-align: center; margin-bottom: 1.5rem; font-weight: 500; }
+
+    /* ─────────────── FIELDS ─────────────── */
+    .field { margin-bottom: 1rem; }
+    .field label {
+      display: block; font-size: .75rem; font-weight: 700;
+      color: var(--gray-700); text-transform: uppercase; letter-spacing: .5px; margin-bottom: .4rem;
+    }
+    .field input, .field select, .field textarea {
+      width: 100%; padding: .7rem 1rem;
+      border: 1.5px solid var(--gray-200); border-radius: 9px;
+      font-size: .95rem; color: var(--gray-900); font-family: inherit;
+      transition: border-color .2s; background: var(--white);
+    }
+    .field input:focus, .field select:focus, .field textarea:focus {
+      outline: none; border-color: var(--gold); box-shadow: 0 0 0 3px rgba(197,162,74,.12);
+    }
+    .field textarea { resize: vertical; min-height: 80px; }
+
+    /* ✅ FIX 2: role="alert" nos erros — elimina warnings de acessibilidade */
+    .error-msg {
+      background: var(--red-bg); color: var(--red); font-size: .83rem;
+      padding: .55rem .9rem; border-radius: 7px; margin-top: .5rem; text-align: center;
+    }
+
+    /* ─────────────── BUTTONS ─────────────── */
+    /* ✅ FIX 3: Todos os botões agora têm type="button" no HTML */
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center; gap: .4rem;
+      padding: .7rem 1.4rem; border-radius: 9px; font-size: .88rem; font-weight: 700;
+      cursor: pointer; border: none; transition: all .18s; font-family: inherit; white-space: nowrap;
+      text-decoration: none; line-height: 1;
+    }
+    .btn:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
+    .btn-navy    { background: var(--navy);        color: var(--white); }
+    .btn-navy:hover    { background: var(--navy-hover); }
+    .btn-gold    { background: var(--gold);         color: var(--navy); }
+    .btn-gold:hover    { background: var(--gold-hover); }
+    .btn-green   { background: var(--green);        color: var(--white); }
+    .btn-green:hover   { background: #15956a; }
+    .btn-red     { background: var(--red);          color: var(--white); }
+    .btn-red:hover     { background: #c0392b; }
+    .btn-outline { background: transparent; border: 1.5px solid var(--navy); color: var(--navy); }
+    .btn-outline:hover { background: var(--navy); color: var(--white); }
+    .btn-ghost   { background: transparent; border: 1.5px solid var(--gray-300); color: var(--gray-700); }
+    .btn-ghost:hover   { background: var(--gray-200); }
+    .btn-full { width: 100%; }
+    .btn-sm   { padding: .38rem .8rem; font-size: .8rem; }
+
+    /* ─────────────── HEADER ─────────────── */
+    .header {
+      background: var(--navy); color: var(--white);
+      height: 58px; padding: 0 1.5rem;
+      display: flex; align-items: center; justify-content: space-between;
+      position: sticky; top: 0; z-index: 50;
+      box-shadow: 0 2px 10px rgba(0,0,0,.22);
+    }
+    .header-brand .name { font-size: .88rem; font-weight: 800; letter-spacing: .5px; }
+    .header-brand .role { font-size: .68rem; color: var(--gold); letter-spacing: 1.5px; }
+    .header-right { display: flex; align-items: center; gap: .75rem; }
+    .pill {
+      background: rgba(197,162,74,.18); border: 1px solid var(--gold);
+      color: var(--gold); padding: .28rem .75rem; border-radius: 20px; font-size: .78rem; font-weight: 600;
+    }
+
+    /* ─────────────── LAYOUT ─────────────── */
+    .main { padding: 1.5rem; max-width: 860px; margin: 0 auto; }
+
+    /* ─────────────── CLOCK ─────────────── */
+    .clock-card {
+      background: var(--white); border-radius: 16px; padding: 2rem 1.5rem; text-align: center;
+      box-shadow: 0 2px 14px rgba(0,0,0,.07); border-top: 4px solid var(--navy); margin-bottom: 1.25rem;
+    }
+    .clock-date { font-size: .82rem; color: var(--gray-500); text-transform: uppercase; letter-spacing: 1.2px; margin-bottom: .2rem; }
+    .clock-time { font-size: 3.2rem; font-weight: 800; color: var(--navy); letter-spacing: 3px; margin-bottom: 1.5rem; font-variant-numeric: tabular-nums; }
+
+    .punch-row { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; max-width: 380px; margin: 0 auto 1rem; }
+    .btn-punch {
+      padding: 1.1rem; font-size: 1rem; font-weight: 800; border: none;
+      border-radius: 12px; cursor: pointer; transition: all .18s; font-family: inherit;
+    }
+    .btn-punch:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
+    .btn-entrada { background: var(--green); color: var(--white); }
+    .btn-entrada:hover { background: #15956a; transform: translateY(-2px); box-shadow: 0 6px 18px rgba(27,175,122,.35); }
+    .btn-saida   { background: var(--red);   color: var(--white); }
+    .btn-saida:hover   { background: #c0392b; transform: translateY(-2px); box-shadow: 0 6px 18px rgba(227,73,72,.35); }
+
+    .btn-adj {
+      background: transparent; border: 1.5px solid var(--gold); color: var(--gold);
+      padding: .55rem 1.4rem; border-radius: 8px; font-size: .82rem; font-weight: 700;
+      cursor: pointer; transition: all .18s; font-family: inherit;
+    }
+    .btn-adj:hover       { background: var(--gold); color: var(--navy); }
+    .btn-adj:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
+
+    /* ─────────────── CARD ─────────────── */
+    .card { background: var(--white); border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,.06); margin-bottom: 1.25rem; overflow: hidden; }
+    .card-header { padding: .9rem 1.2rem; border-bottom: 1px solid var(--gray-200); display: flex; align-items: center; justify-content: space-between; }
+    .card-title  { font-size: .9rem; font-weight: 700; color: var(--gray-900); }
+
+    /* ─────────────── RECORDS ─────────────── */
+    .rec { padding: .7rem 1.2rem; display: flex; align-items: center; gap: .75rem; border-bottom: 1px solid var(--gray-200); }
+    .rec:last-child { border-bottom: none; }
+    .dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+    .dot-in  { background: var(--green); }
+    .dot-out { background: var(--red); }
+    .rec-info  { flex: 1; }
+    .rec-label { font-size: .84rem; font-weight: 600; color: var(--gray-900); }
+    .rec-time  { font-size: .78rem; color: var(--gray-500); margin-top: 1px; }
+    .empty { padding: 1.5rem; text-align: center; color: var(--gray-500); font-size: .88rem; }
+
+    /* ─────────────── BADGES ─────────────── */
+    .badge { padding: .18rem .6rem; border-radius: 20px; font-size: .72rem; font-weight: 700; white-space: nowrap; }
+    .badge-adj      { background: var(--amber-bg); color: var(--amber); }
+    .badge-pending  { background: var(--amber-bg); color: var(--amber); }
+    .badge-approved { background: var(--green-bg); color: var(--green); }
+    .badge-rejected { background: var(--red-bg);   color: var(--red);   }
+
+    /* ─────────────── TABS ─────────────── */
+    .tabs { display: flex; gap: .25rem; background: var(--gray-200); border-radius: 10px; padding: .25rem; margin-bottom: 1.5rem; }
+    .tab {
+      flex: 1; padding: .58rem .4rem; border: none; background: transparent;
+      border-radius: 8px; font-size: .8rem; font-weight: 700; cursor: pointer;
+      color: var(--gray-500); transition: all .18s; font-family: inherit; text-align: center;
+    }
+    .tab:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
+    .tab.active { background: var(--white); color: var(--navy); box-shadow: 0 1px 4px rgba(0,0,0,.1); }
+
+    /* ─────────────── SUMMARY GRID ─────────────── */
+    .summary-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px,1fr)); gap: 1rem; margin-bottom: 1.5rem; }
+    .summary-card { background: var(--white); border-radius: 12px; padding: 1rem 1.2rem; box-shadow: 0 2px 8px rgba(0,0,0,.06); border-left: 4px solid var(--navy); }
+    .sc-name   { font-size: .9rem; font-weight: 700; color: var(--navy); margin-bottom: .3rem; }
+    .sc-status { font-size: .8rem; color: var(--gray-500); }
+
+    /* ─────────────── ADJ ITEM ─────────────── */
+    .adj-item { background: var(--white); border-radius: 12px; padding: 1rem 1.2rem; margin-bottom: .75rem; box-shadow: 0 2px 8px rgba(0,0,0,.06); border-left: 4px solid var(--amber); }
+    .adj-head { display: flex; align-items: flex-start; justify-content: space-between; gap: .5rem; }
+    .adj-who  { font-size: .85rem; font-weight: 700; color: var(--navy); }
+    .adj-det  { font-size: .8rem;  color: var(--gray-500); margin: .3rem 0; }
+    .adj-just { font-size: .83rem; color: var(--gray-700); background: var(--gray-100); padding: .5rem .75rem; border-radius: 6px; margin: .5rem 0; }
+    .adj-btns { display: flex; gap: .5rem; margin-top: .5rem; }
+
+    /* ─────────────── FILTER ─────────────── */
+    .filter-bar { background: var(--white); border-radius: 10px; padding: .7rem 1rem; display: flex; gap: .75rem; align-items: center; flex-wrap: wrap; margin-bottom: 1rem; box-shadow: 0 1px 4px rgba(0,0,0,.06); }
+    .filter-bar label  { font-size: .78rem; color: var(--gray-500); font-weight: 700; }
+    .filter-bar select,
+    .filter-bar input[type="month"] { padding: .35rem .65rem; border: 1.5px solid var(--gray-200); border-radius: 7px; font-size: .83rem; font-family: inherit; color: var(--gray-900); }
+
+    /* ─────────────── USERS ─────────────── */
+    .user-item { background: var(--white); border-radius: 10px; padding: .9rem 1.2rem; margin-bottom: .75rem; box-shadow: 0 1px 5px rgba(0,0,0,.06); display: flex; align-items: center; gap: .75rem; }
+    .avatar { width: 38px; height: 38px; border-radius: 50%; background: var(--navy); color: var(--white); display: flex; align-items: center; justify-content: center; font-size: .9rem; font-weight: 800; flex-shrink: 0; }
+    .u-name  { font-size: .88rem; font-weight: 700; color: var(--gray-900); }
+    .u-login { font-size: .78rem; color: var(--gray-500); margin-top: 2px; }
+
+    /* ─────────────── MODAL ─────────────── */
+    .overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,.5);
+      display: flex; align-items: center; justify-content: center; z-index: 200; padding: 1rem;
+    }
+    .modal { background: var(--white); border-radius: 16px; padding: 1.5rem; width: 100%; max-width: 430px; box-shadow: 0 20px 60px rgba(0,0,0,.3); max-height: 90vh; overflow-y: auto; }
+    .modal-title   { font-size: 1.05rem; font-weight: 800; color: var(--navy); margin-bottom: 1rem; padding-bottom: .75rem; border-bottom: 1px solid var(--gray-200); }
+    .modal-actions { display: flex; gap: .75rem; margin-top: 1rem; justify-content: flex-end; }
+
+    .notif { display: inline-block; width: 8px; height: 8px; background: var(--amber); border-radius: 50%; margin-left: 4px; vertical-align: middle; }
+
+    /* ─────────────── TOAST ─────────────── */
+    #toast {
+      position: fixed; bottom: 1.5rem; left: 50%; transform: translateX(-50%);
+      background: var(--navy); color: var(--white);
+      padding: .7rem 1.5rem; border-radius: 30px; font-size: .88rem; font-weight: 600;
+      box-shadow: 0 4px 20px rgba(0,0,0,.3); z-index: 9999; pointer-events: none;
+      opacity: 0; transition: opacity .3s; white-space: nowrap;
+    }
+
+    .section-title { font-size: .75rem; font-weight: 800; color: var(--gray-500); text-transform: uppercase; letter-spacing: 1.2px; margin-bottom: .75rem; margin-top: .25rem; }
+
+    @media (max-width: 480px) {
+      .punch-row { grid-template-columns: 1fr; }
+      .clock-time { font-size: 2.4rem; }
+      .tabs { flex-direction: column; }
+      .tab { text-align: left; }
+    }
+
+    /* ─────────────── BANCO DE HORAS ─────────────── */
+    .bh-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px,1fr)); gap: 1rem; margin-bottom: 1.5rem; }
+    .bh-card { background: var(--white); border-radius: 12px; padding: 1rem 1.2rem; box-shadow: 0 2px 8px rgba(0,0,0,.06); }
+    .bh-card .bh-label { font-size: .72rem; font-weight: 700; color: var(--gray-500); text-transform: uppercase; letter-spacing: .5px; margin-bottom: .35rem; }
+    .bh-card .bh-value { font-size: 1.5rem; font-weight: 800; }
+    .bh-pos { color: var(--green); } .bh-neg { color: var(--red); } .bh-neu { color: var(--navy); }
+
+    .bh-table-wrap { overflow-x: auto; }
+    table.bh-table { width: 100%; border-collapse: collapse; font-size: .82rem; }
+    table.bh-table th { text-align: left; padding: .6rem .8rem; background: var(--gray-100); color: var(--gray-500); font-size: .7rem; text-transform: uppercase; letter-spacing: .4px; white-space: nowrap; }
+    table.bh-table td { padding: .55rem .8rem; border-bottom: 1px solid var(--gray-200); white-space: nowrap; }
+    table.bh-table tr.bh-off td { color: var(--gray-300); }
+    table.bh-table tr.bh-today { background: var(--gray-100); }
+    .bh-punches { font-size: .74rem; color: var(--gray-500); white-space: normal; }
+    .bh-incomplete { color: var(--amber); font-weight: 700; }
+
+    .shift-row { display: flex; align-items: center; gap: .5rem; margin-bottom: .5rem; flex-wrap: wrap; }
+    .shift-row label.dayname { width: 96px; font-size: .82rem; font-weight: 700; color: var(--gray-700); flex-shrink: 0; }
+    .shift-row input[type="time"] { padding: .35rem .5rem; border: 1.5px solid var(--gray-200); border-radius: 7px; font-size: .82rem; font-family: inherit; }
+    .shift-row .to { font-size: .78rem; color: var(--gray-500); }
+    .shift-row input[type="checkbox"] { width: 17px; height: 17px; flex-shrink: 0; }
   </style>
 </head>
 <body>
-  <div id="root"></div>
 
-  <script type="text/babel" data-presets="react">
-    /* ═══════════════════════════════════════════════════════════════════
-       ┃  COLE AQUI AS 6 CREDENCIAIS DO SEU FIREBASE                      ┃
-       ┃  (Configurações do projeto → Seus apps → ícone </>)             ┃
-       ═══════════════════════════════════════════════════════════════════ */
-    const firebaseConfig = {
-      apiKey:            "AIzaSyDHBmGuYWptEN-UFawXtA3ROiT2NuOjC3E",
-      authDomain:        "agendamentommadv-32dae.firebaseapp.com",
-      projectId:         "agendamentommadv-32dae",
-      storageBucket:     "agendamentommadv-32dae.firebasestorage.app",
-      messagingSenderId: "32241097932",
-      appId:             "1:32241097932:web:3459dc7d8eba9d93a77669",
-    };
-    /* ═══════════════════════════════════════════════════════════════════ */
-
-    firebase.initializeApp(firebaseConfig);
-    const db = firebase.firestore();
-    const auth = firebase.auth();
-
-    // Autenticação anônima: necessária para que as regras do Firestore
-    // (que exigem "request.auth != null") liberem leitura/escrita.
-    // Sem isso, o app cai em "Missing or insufficient permissions".
-    auth.signInAnonymously().catch((err) => {
-      console.error("Erro ao autenticar anonimamente:", err);
-    });
-
-    const { useState, useEffect } = React;
-
-    // ─── Cores e configuração da equipe ───────────────────────────────
-    const NAVY = "#1F3864";
-    const GOLD = "#C5A24A";
-
-    const TEAM = {
-      SDR: ["Izabel", "Kelly"],
-      "Social Seller": ["Daniel", "Camila"],
-    };
-    const CLOSERS = ["Laís", "Júlia", "Léo", "Malu", "Franklin", "Daniel"];
-
-    const ALL_SCHEDULERS = Object.entries(TEAM).flatMap(([role, members]) =>
-      members.map((name) => ({ name, role }))
-    );
-
-    const STATUS_CONFIG = {
-      agendado:  { label: "Agendado",  color: "#1D4ED8", bg: "#DBEAFE", border: "#93C5FD" },
-      realizado: { label: "Realizado", color: "#15803D", bg: "#DCFCE7", border: "#86EFAC" },
-      cancelado: { label: "Cancelado", color: "#B91C1C", bg: "#FEE2E2", border: "#FCA5A5" },
-      noshow:    { label: "No-show",   color: "#B45309", bg: "#FEF3C7", border: "#FCD34D" },
-    };
-
-    const MONTHS = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
-
-    // Tipo de atendimento
-    const TYPE_CONFIG = {
-      reuniao:  { label: "Reunião",  icon: "🤝", color: "#1F3864", bg: "#E8EDF6" },
-      consulta: { label: "Consulta", icon: "💬", color: "#8B6914", bg: "#FBF3E3" },
-    };
-
-    // Códigos de país (DDI) para telefone internacional
-    const COUNTRY_CODES = [
-      { code: "+55",  label: "🇧🇷 +55 Brasil" },
-      { code: "+351", label: "🇵🇹 +351 Portugal" },
-      { code: "+1",   label: "🇺🇸 +1 EUA / Canadá" },
-      { code: "+54",  label: "🇦🇷 +54 Argentina" },
-      { code: "+598", label: "🇺🇾 +598 Uruguai" },
-      { code: "+595", label: "🇵🇾 +595 Paraguai" },
-      { code: "+591", label: "🇧🇴 +591 Bolívia" },
-      { code: "+56",  label: "🇨🇱 +56 Chile" },
-      { code: "+57",  label: "🇨🇴 +57 Colômbia" },
-      { code: "+34",  label: "🇪🇸 +34 Espanha" },
-      { code: "+39",  label: "🇮🇹 +39 Itália" },
-      { code: "+33",  label: "🇫🇷 +33 França" },
-      { code: "+49",  label: "🇩🇪 +49 Alemanha" },
-      { code: "+44",  label: "🇬🇧 +44 Reino Unido" },
-      { code: "+41",  label: "🇨🇭 +41 Suíça" },
-      { code: "+81",  label: "🇯🇵 +81 Japão" },
-      { code: "+61",  label: "🇦🇺 +61 Austrália" },
-      { code: "+971", label: "🇦🇪 +971 Emirados Árabes" },
-    ];
-
-    function getEmptyForm() {
-      return {
-        schedulerName: "", schedulerRole: "",
-        closer: "", clientName: "",
-        clientPhoneCountry: "+55", clientPhone: "",
-        bookingDate: new Date().toISOString().slice(0, 10),
-        date: "", time: "", notes: "", type: "reuniao",
-      };
-    }
-
-    function fmtDate(d) {
-      if (!d) return "—";
-      const [y, m, day] = d.split("-");
-      return `${day}/${m}/${y}`;
-    }
-
-    // Segunda-feira da semana de uma data "YYYY-MM-DD"
-    function weekStart(dateStr) {
-      const d = new Date(dateStr + "T00:00:00");
-      const day = d.getDay();              // 0=Dom ... 6=Sáb
-      const diff = (day === 0 ? -6 : 1 - day);
-      d.setDate(d.getDate() + diff);
-      return d;
-    }
-    function weekLabel(monday) {
-      const end = new Date(monday);
-      end.setDate(end.getDate() + 6);
-      const f = (dt) => `${String(dt.getDate()).padStart(2,"0")}/${MONTHS[dt.getMonth()].toLowerCase()}`;
-      return `${f(monday)} – ${f(end)}`;
-    }
-    const MONTHS_FULL = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
-    function monthLabel(key) {
-      const [y, m] = key.split("-");
-      return `${MONTHS_FULL[parseInt(m) - 1]}/${y}`;
-    }
-    // Data do agendamento, com fallback para registros antigos
-    function bookingOf(m) {
-      return m.bookingDate || (m.createdAt ? m.createdAt.slice(0, 10) : m.date) || "";
-    }
-
-    // ─── Ícones (SVG inline) ──────────────────────────────────────────
-    function Svg({ children, size = 14 }) {
-      return (
-        <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
-          stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          {children}
-        </svg>
-      );
-    }
-    const IconPlus     = (p) => <Svg {...p}><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></Svg>;
-    const IconCalendar = (p) => <Svg {...p}><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></Svg>;
-    const IconChart    = (p) => <Svg {...p}><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></Svg>;
-    const IconTrash    = (p) => <Svg {...p}><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></Svg>;
-    const IconUser     = (p) => <Svg {...p}><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></Svg>;
-    const IconClock    = (p) => <Svg {...p}><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></Svg>;
-    const IconPhone    = (p) => <Svg {...p}><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></Svg>;
-    const IconNote     = (p) => <Svg {...p}><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></Svg>;
-    const IconCheck    = (p) => <Svg {...p}><polyline points="20 6 9 17 4 12"/></Svg>;
-    const IconAlert    = (p) => <Svg {...p}><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></Svg>;
-    const IconChevron  = (p) => <Svg {...p}><polyline points="9 18 15 12 9 6"/></Svg>;
-    const IconWifiOff  = (p) => <Svg {...p}><line x1="1" y1="1" x2="23" y2="23"/><path d="M16.72 11.06A10.94 10.94 0 0 1 19 12.55"/><path d="M5 12.55a10.94 10.94 0 0 1 5.17-2.39"/><path d="M10.71 5.05A16 16 0 0 1 22.58 9"/><path d="M1.42 9a15.91 15.91 0 0 1 4.7-2.88"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><line x1="12" y1="20" x2="12.01" y2="20"/></Svg>;
-    const IconRefresh  = (p) => <Svg {...p}><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></Svg>;
-    const IconDownload = (p) => <Svg {...p}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></Svg>;
-    const IconEdit     = (p) => <Svg {...p}><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></Svg>;
-
-    // ─── Componentes pequenos ─────────────────────────────────────────
-    function StatusBadge({ status }) {
-      const s = STATUS_CONFIG[status] || STATUS_CONFIG.agendado;
-      return (
-        <span style={{
-          background: s.bg, color: s.color, border: `1px solid ${s.border}`,
-          borderRadius: 99, padding: "2px 10px", fontSize: 11, fontWeight: 700,
-          whiteSpace: "nowrap", display: "inline-block",
-        }}>
-          {s.label}
-        </span>
-      );
-    }
-    function CountBadge({ n, color, bg }) {
-      return (
-        <span style={{
-          background: bg, color, borderRadius: 99,
-          padding: "2px 10px", fontSize: 12, fontWeight: 700, display: "inline-block",
-        }}>{n}</span>
-      );
-    }
-
-    // ─── App principal ────────────────────────────────────────────────
-    function App() {
-      const [tab, setTab]           = useState("dashboard");
-      const [meetings, setMeetings] = useState([]);
-      const [loading, setLoading]   = useState(true);
-      const [connected, setConnected] = useState(true);
-      const [dbError, setDbError]   = useState(null);
-      const [formOk, setFormOk]     = useState(false);
-      const [formErr, setFormErr]   = useState("");
-      const [saving, setSaving]     = useState(false);
-      const [form, setForm]         = useState(getEmptyForm());
-
-      const [fCloser, setFCloser] = useState("todos");
-      const [fStatus, setFStatus] = useState("todos");
-      const [fSched,  setFSched]  = useState("todos");
-      const [fType,   setFType]   = useState("todos");
-      const [sortBy,  setSortBy]  = useState("date_asc");
-
-      // Período dos rankings
-      const hoje = new Date().toISOString().slice(0, 10);
-      const [rankPeriod, setRankPeriod]   = useState("semana"); // semana | mes | total
-      const [rankDateRef, setRankDateRef] = useState("reuniao"); // reuniao | agendamento
-      const [rankWeek,  setRankWeek]  = useState(weekStart(hoje).toISOString().slice(0, 10));
-      const [rankMonth, setRankMonth] = useState(hoje.slice(0, 7));
-
-      // Reagendamento (qual card está aberto + nova data/hora)
-      const [reschedId,   setReschedId]   = useState(null);
-      const [reschedDate, setReschedDate] = useState("");
-      const [reschedTime, setReschedTime] = useState("");
-
-      // Edição completa (qual card está em edição + dados temporários)
-      const [editId, setEditId]     = useState(null);
-      const [editForm, setEditForm] = useState(null);
-
-      // Listener em tempo real (só assina depois que o login anônimo terminar,
-      // senão a leitura chega antes do "request.auth != null" existir)
-      useEffect(() => {
-        let unsubSnapshot = () => {};
-
-        const unsubAuth = auth.onAuthStateChanged((user) => {
-          if (!user) return; // ainda autenticando (o signInAnonymously já foi disparado acima)
-
-          unsubSnapshot = db.collection("meetings").orderBy("createdAt", "desc").onSnapshot(
-            (snapshot) => {
-              const data = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
-              setMeetings(data);
-              setLoading(false);
-              setConnected(true);
-              setDbError(null);
-            },
-            (err) => {
-              console.error("Firebase error:", err);
-              setConnected(false);
-              setDbError("Não foi possível conectar ao banco. Verifique as credenciais do Firebase no topo do arquivo.");
-              setLoading(false);
-            }
-          );
-        });
-
-        return () => { unsubAuth(); unsubSnapshot(); };
-      }, []);
-
-      function setF(key, val) { setForm((f) => ({ ...f, [key]: val })); }
-
-      async function handleSubmit() {
-        setFormErr("");
-        if (!form.schedulerName || !form.closer || !form.clientName || !form.bookingDate || !form.date || !form.time) {
-          setFormErr("Preencha todos os campos marcados com *.");
-          return;
-        }
-        // Trava: 1 agendamento por horário por Closer (ignora cancelados)
-        const conflito = meetings.find(
-          (m) =>
-            m.closer === form.closer &&
-            m.date === form.date &&
-            m.time === form.time &&
-            m.status !== "cancelado"
-        );
-        if (conflito) {
-          setFormErr(`${form.closer} já tem uma reunião em ${fmtDate(form.date)} às ${form.time}. Escolha outro horário ou outro closer.`);
-          return;
-        }
-        setSaving(true);
-        try {
-          const telefone = form.clientPhone
-            ? `${form.clientPhoneCountry} ${form.clientPhone}`.trim()
-            : "";
-          await db.collection("meetings").add({
-            schedulerName: form.schedulerName,
-            schedulerRole: form.schedulerRole,
-            closer:        form.closer,
-            clientName:    form.clientName,
-            clientPhone:   telefone,
-            bookingDate:   form.bookingDate || new Date().toISOString().slice(0, 10),
-            date:          form.date,
-            time:          form.time,
-            notes:         form.notes,
-            type:          form.type || "reuniao",
-            status:        "agendado",
-            createdAt:     new Date().toISOString(),
-          });
-          setForm(getEmptyForm());
-          setFormOk(true);
-          setTimeout(() => { setFormOk(false); setTab("agenda"); }, 1400);
-        } catch (err) {
-          console.error(err);
-          setFormErr("Erro ao salvar. Verifique a conexão e tente novamente.");
-        } finally {
-          setSaving(false);
-        }
-      }
-
-      async function updateStatus(id, status) {
-        try { await db.collection("meetings").doc(id).update({ status }); }
-        catch (err) { console.error(err); alert("Erro ao atualizar."); }
-      }
-
-      async function removeMeeting(id) {
-        if (!confirm("Remover este agendamento?")) return;
-        try { await db.collection("meetings").doc(id).delete(); }
-        catch (err) { console.error(err); alert("Erro ao remover."); }
-      }
-
-      // Abre o painel de reagendamento com a data/hora atuais preenchidas
-      function abrirReagendar(m) {
-        setReschedId(m.id);
-        setReschedDate(m.date || "");
-        setReschedTime(m.time || "");
-      }
-
-      async function confirmarReagendar(m) {
-        if (!reschedDate || !reschedTime) { alert("Informe a nova data e o novo horário."); return; }
-        // Trava: 1 reunião por horário por Closer (ignora este próprio e cancelados)
-        const conflito = meetings.find(
-          (x) =>
-            x.id !== m.id &&
-            x.closer === m.closer &&
-            x.date === reschedDate &&
-            x.time === reschedTime &&
-            x.status !== "cancelado"
-        );
-        if (conflito) {
-          alert(`${m.closer} já tem uma reunião em ${fmtDate(reschedDate)} às ${reschedTime}. Escolha outro horário.`);
-          return;
-        }
-        try {
-          await db.collection("meetings").doc(m.id).update({
-            date: reschedDate,
-            time: reschedTime,
-            status: "agendado",
-            rescheduledAt: new Date().toISOString(),
-            rescheduleCount: (m.rescheduleCount || 0) + 1,
-          });
-          setReschedId(null);
-        } catch (err) { console.error(err); alert("Erro ao reagendar."); }
-      }
-
-      // Exporta os resultados filtrados para Excel (.xlsx)
-      function exportarExcel() {
-        if (!window.XLSX) { alert("A biblioteca de Excel ainda está carregando. Tente novamente em alguns segundos."); return; }
-        const statusLabel = { agendado: "Agendado", realizado: "Realizado", cancelado: "Cancelado", noshow: "No-show" };
-        const linhas = filtered.map((m) => ({
-          "Data do agendamento": fmtDate(bookingOf(m)),
-          "Data da reunião": fmtDate(m.date),
-          "Horário": m.time || "",
-          "Tipo": TYPE_CONFIG[m.type || "reuniao"].label,
-          "Cliente": m.clientName || "",
-          "Telefone": m.clientPhone || "",
-          "Agendador": m.schedulerName || "",
-          "Função": m.schedulerRole || "",
-          "Closer": m.closer || "",
-          "Status": statusLabel[m.status] || m.status,
-          "Reagendamentos": m.rescheduleCount || 0,
-          "Observações": m.notes || "",
-        }));
-        if (linhas.length === 0) { alert("Não há agendamentos para exportar com os filtros atuais."); return; }
-        const ws = XLSX.utils.json_to_sheet(linhas);
-        ws["!cols"] = [
-          { wch: 18 }, { wch: 15 }, { wch: 9 }, { wch: 10 }, { wch: 24 }, { wch: 18 },
-          { wch: 14 }, { wch: 14 }, { wch: 12 }, { wch: 12 }, { wch: 14 }, { wch: 40 },
-        ];
-        const wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, ws, "Agendamentos");
-        XLSX.writeFile(wb, `MMADV_Agendamentos_${new Date().toISOString().slice(0, 10)}.xlsx`);
-      }
-
-      // Abre a edição completa de um agendamento
-      function abrirEditar(m) {
-        setReschedId(null);
-        setEditId(m.id);
-        setEditForm({
-          schedulerName: m.schedulerName || "",
-          schedulerRole: m.schedulerRole || "",
-          closer: m.closer || "",
-          clientName: m.clientName || "",
-          clientPhoneCountry: (m.clientPhone && m.clientPhone.startsWith("+")) ? m.clientPhone.split(" ")[0] : "+55",
-          clientPhone: (m.clientPhone && m.clientPhone.startsWith("+")) ? m.clientPhone.split(" ").slice(1).join(" ") : (m.clientPhone || ""),
-          bookingDate: bookingOf(m),
-          date: m.date || "",
-          time: m.time || "",
-          notes: m.notes || "",
-          type: m.type || "reuniao",
-        });
-      }
-      function setEF(key, val) { setEditForm((f) => ({ ...f, [key]: val })); }
-
-      async function salvarEdicao(m) {
-        const f = editForm;
-        if (!f.schedulerName || !f.closer || !f.clientName || !f.bookingDate || !f.date || !f.time) {
-          alert("Preencha todos os campos obrigatórios (*).");
-          return;
-        }
-        // Trava: 1 reunião por horário por Closer (ignora este próprio e cancelados)
-        const conflito = meetings.find(
-          (x) =>
-            x.id !== m.id &&
-            x.closer === f.closer &&
-            x.date === f.date &&
-            x.time === f.time &&
-            x.status !== "cancelado"
-        );
-        if (conflito) {
-          alert(`${f.closer} já tem uma reunião em ${fmtDate(f.date)} às ${f.time}. Escolha outro horário ou closer.`);
-          return;
-        }
-        const telefone = f.clientPhone ? `${f.clientPhoneCountry} ${f.clientPhone}`.trim() : "";
-        try {
-          await db.collection("meetings").doc(m.id).update({
-            schedulerName: f.schedulerName,
-            schedulerRole: f.schedulerRole,
-            closer: f.closer,
-            clientName: f.clientName,
-            clientPhone: telefone,
-            bookingDate: f.bookingDate,
-            date: f.date,
-            time: f.time,
-            notes: f.notes,
-            type: f.type,
-          });
-          setEditId(null);
-          setEditForm(null);
-        } catch (err) { console.error(err); alert("Erro ao salvar a edição."); }
-      }
-
-      const filtered = meetings
-        .filter((m) =>
-          (fCloser === "todos" || m.closer === fCloser) &&
-          (fStatus === "todos" || m.status === fStatus) &&
-          (fSched  === "todos" || m.schedulerName === fSched) &&
-          (fType   === "todos" || (m.type || "reuniao") === fType)
-        )
-        .sort((a, b) => {
-          if (sortBy === "date_asc")  return (a.date + a.time).localeCompare(b.date + b.time);
-          if (sortBy === "date_desc") return (b.date + b.time).localeCompare(a.date + a.time);
-          return new Date(b.createdAt || 0) - new Date(a.createdAt || 0);
-        });
-
-      const stats = {
-        agendado:  meetings.filter((m) => m.status === "agendado").length,
-        realizado: meetings.filter((m) => m.status === "realizado").length,
-        cancelado: meetings.filter((m) => m.status === "cancelado").length,
-        noshow:    meetings.filter((m) => m.status === "noshow").length,
-      };
-
-      const closerStats = CLOSERS.map((name) => ({
-        name,
-        agendado:  meetings.filter((m) => m.closer === name && m.status === "agendado").length,
-        realizado: meetings.filter((m) => m.closer === name && m.status === "realizado").length,
-        noshow:    meetings.filter((m) => m.closer === name && m.status === "noshow").length,
-        total:     meetings.filter((m) => m.closer === name).length,
-      }));
-
-      const schedStats = ALL_SCHEDULERS.map((s) => ({
-        ...s,
-        total: meetings.filter((m) => m.schedulerName === s.name).length,
-      }));
-
-      // Data de referência do ranking (reunião ou agendamento)
-      const refDate = (m) => (rankDateRef === "agendamento" ? bookingOf(m) : m.date);
-
-      // Listas de meses e semanas disponíveis (conforme a referência escolhida)
-      const datedMeetings = meetings.filter((m) => refDate(m));
-      const availableMonths = [...new Set(datedMeetings.map((m) => refDate(m).slice(0, 7)))].sort().reverse();
-      const availableWeeks  = [...new Set(datedMeetings.map((m) => weekStart(refDate(m)).toISOString().slice(0, 10)))].sort().reverse();
-
-      // Garante que o período atual apareça na lista mesmo sem dados
-      if (!availableMonths.includes(rankMonth)) availableMonths.unshift(rankMonth);
-      if (!availableWeeks.includes(rankWeek))   availableWeeks.unshift(rankWeek);
-
-      // Filtra agendamentos pelo período do ranking selecionado
-      function inRankPeriod(m) {
-        const d = refDate(m);
-        if (!d) return false;
-        if (rankPeriod === "total")  return true;
-        if (rankPeriod === "mes")    return d.slice(0, 7) === rankMonth;
-        if (rankPeriod === "semana") return weekStart(d).toISOString().slice(0, 10) === rankWeek;
-        return true;
-      }
-      const periodMeetings = meetings.filter(inRankPeriod);
-
-      const periodoTexto =
-        rankPeriod === "total"  ? "Total geral" :
-        rankPeriod === "mes"    ? monthLabel(rankMonth) :
-        weekLabel(new Date(rankWeek + "T00:00:00"));
-
-      // Ranking: quem mais agendou (SDR + Social Seller) no período
-      const rankAgendadores = ALL_SCHEDULERS
-        .map((s) => ({ ...s, total: periodMeetings.filter((m) => m.schedulerName === s.name).length }))
-        .sort((a, b) => b.total - a.total);
-
-      // Ranking: closers com mais reuniões realizadas no período
-      const rankClosers = CLOSERS
-        .map((name) => ({
-          name,
-          realizado: periodMeetings.filter((m) => m.closer === name && m.status === "realizado").length,
-        }))
-        .sort((a, b) => b.realizado - a.realizado);
-
-      const medalha = (i) => (i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : `${i + 1}º`);
-
-      // Métrica semanal (agrupa pela segunda-feira da semana da data do agendamento)
-      const weekMap = {};
-      meetings.forEach((m) => {
-        if (!m.date) return;
-        const monday = weekStart(m.date);
-        const key = monday.toISOString().slice(0, 10);
-        if (!weekMap[key]) weekMap[key] = { key, monday, total: 0, realizado: 0, reuniao: 0, consulta: 0 };
-        weekMap[key].total++;
-        if (m.status === "realizado") weekMap[key].realizado++;
-        if ((m.type || "reuniao") === "consulta") weekMap[key].consulta++;
-        else weekMap[key].reuniao++;
-      });
-      const weekStats = Object.values(weekMap).sort((a, b) => b.key.localeCompare(a.key)).slice(0, 8);
-      const weekMax = weekStats.reduce((mx, w) => Math.max(mx, w.total), 0) || 1;
-
-      if (loading) {
-        return (
-          <div className="flex flex-col items-center justify-center min-h-screen gap-3" style={{ color: NAVY }}>
-            <div className="w-8 h-8 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>
-            <p className="text-sm text-gray-500">Conectando ao banco de dados...</p>
-          </div>
-        );
-      }
-
-      const inputCls = "w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500";
-      const labelCls = "block text-xs font-bold uppercase tracking-wide text-gray-500 mb-1.5";
-
-      return (
-        <div className="min-h-screen" style={{ background: "#F0EEE9" }}>
-
-          {/* Header */}
-          <header style={{ background: NAVY }} className="shadow-lg sticky top-0 z-10">
-            <div className="max-w-6xl mx-auto px-6 flex items-center justify-between h-16">
-              <div className="flex items-center gap-3">
-                <div style={{ background: GOLD, color: NAVY, borderRadius: 8, width: 38, height: 38,
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  fontWeight: 900, fontSize: 13, letterSpacing: 1 }}>MM</div>
-                <div>
-                  <div className="text-white font-black text-sm tracking-widest">MMADV</div>
-                  <div className="text-white/40 text-xs mt-0.5">Agendamentos Comerciais</div>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-4">
-                <div className="flex items-center gap-1.5">
-                  {connected ? (
-                    <>
-                      <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse inline-block"></span>
-                      <span className="text-white/40 text-xs hidden sm:block">Ao vivo</span>
-                    </>
-                  ) : (
-                    <>
-                      <span className="text-red-400"><IconWifiOff size={13} /></span>
-                      <span className="text-red-400 text-xs hidden sm:block">Desconectado</span>
-                    </>
-                  )}
-                </div>
-
-                <nav className="flex gap-1">
-                  {[
-                    { k: "dashboard", label: "Dashboard", Icon: IconChart },
-                    { k: "agendar",   label: "Agendar",   Icon: IconPlus },
-                    { k: "agenda",    label: "Agenda",     Icon: IconCalendar },
-                  ].map(({ k, label, Icon }) => (
-                    <button key={k} onClick={() => setTab(k)} style={{
-                      background: tab === k ? GOLD : "transparent",
-                      color: tab === k ? NAVY : "rgba(255,255,255,0.65)",
-                      border: "none", borderRadius: 8, cursor: "pointer",
-                      padding: "8px 16px", fontWeight: tab === k ? 700 : 500,
-                      fontSize: 13, display: "flex", alignItems: "center", gap: 6,
-                    }}>
-                      <Icon size={14} /> {label}
-                    </button>
-                  ))}
-                </nav>
-              </div>
-            </div>
-          </header>
-
-          {dbError && (
-            <div className="bg-red-50 border-b-2 border-red-300 px-6 py-3 flex items-center gap-2 text-red-700 text-sm">
-              <IconAlert size={16} /> <strong>Erro de conexão:</strong> {dbError}
-            </div>
-          )}
-
-          <main className="max-w-6xl mx-auto px-6 py-8">
-
-            {/* DASHBOARD */}
-            {tab === "dashboard" && (
-              <div className="space-y-6">
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  {[
-                    { k: "agendado",  label: "Agendados",  icon: "🕐", color: "#1D4ED8", accent: "#3B82F6" },
-                    { k: "realizado", label: "Realizados", icon: "✅", color: "#15803D", accent: "#22C55E" },
-                    { k: "cancelado", label: "Cancelados", icon: "✕", color: "#B91C1C", accent: "#EF4444" },
-                    { k: "noshow",    label: "No-show",    icon: "👻", color: "#B45309", accent: "#F59E0B" },
-                  ].map(({ k, label, icon, color, accent }) => (
-                    <div key={k} className="bg-white rounded-xl p-5 shadow-sm flex items-center gap-4"
-                      style={{ borderLeft: `4px solid ${accent}` }}>
-                      <span style={{ fontSize: 28 }}>{icon}</span>
-                      <div>
-                        <div style={{ color, fontSize: 32, fontWeight: 900, lineHeight: 1 }}>{stats[k]}</div>
-                        <div className="text-xs text-gray-400 mt-1">{label}</div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                {/* ── MÉTRICA SEMANAL ── */}
-                <div className="bg-white rounded-xl shadow-sm overflow-hidden">
-                  <div className="px-5 py-4 border-b border-gray-100 flex items-center gap-2">
-                    <span style={{ background: "#E8EDF6", color: NAVY, borderRadius: 6, padding: "3px 10px", fontSize: 11, fontWeight: 700 }}>SEMANAL</span>
-                    <span className="font-semibold text-sm" style={{ color: NAVY }}>📅 Agendamentos por Semana</span>
-                  </div>
-                  <div className="p-5 space-y-3">
-                    {weekStats.length === 0 && (
-                      <div className="text-center text-gray-400 text-sm py-6">Nenhum agendamento ainda</div>
-                    )}
-                    {weekStats.map((w) => {
-                      const pct = Math.round((w.total / weekMax) * 100);
-                      return (
-                        <div key={w.key} className="flex items-center gap-4">
-                          <div className="text-xs font-bold" style={{ color: NAVY, minWidth: 110 }}>{weekLabel(w.monday)}</div>
-                          <div className="flex-1">
-                            <div style={{ height: 24, background: "#F3F4F6", borderRadius: 8, overflow: "hidden", position: "relative" }}>
-                              <div style={{ height: "100%", width: `${pct}%`, background: NAVY, borderRadius: 8, transition: "width 0.4s", minWidth: w.total > 0 ? 28 : 0, display: "flex", alignItems: "center", justifyContent: "flex-end" }}>
-                                {w.total > 0 && <span style={{ color: "#fff", fontSize: 12, fontWeight: 800, paddingRight: 8 }}>{w.total}</span>}
-                              </div>
-                            </div>
-                          </div>
-                          <div className="flex gap-3 text-xs shrink-0" style={{ minWidth: 200 }}>
-                            <span style={{ color: "#15803D" }}>✅ {w.realizado} realiz.</span>
-                            <span style={{ color: "#6B7280" }}>🤝 {w.reuniao}</span>
-                            <span style={{ color: "#8B6914" }}>💬 {w.consulta}</span>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                <div className="grid gap-5 lg:grid-cols-[1.5fr_1fr]">
-                  <div className="bg-white rounded-xl shadow-sm overflow-hidden">
-                    <div className="px-5 py-4 border-b border-gray-100 flex items-center gap-2">
-                      <span style={{ background: "#FBF3E3", color: "#8B6914", borderRadius: 6, padding: "3px 10px", fontSize: 11, fontWeight: 700 }}>CLOSERS</span>
-                      <span className="font-semibold text-sm" style={{ color: NAVY }}>Performance</span>
-                    </div>
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-sm">
-                        <thead>
-                          <tr className="bg-gray-50">
-                            {["Closer","Pendente","Realizado","No-show","Total"].map((h) => (
-                              <th key={h} className="px-4 py-3 text-xs font-bold uppercase tracking-wide text-gray-400"
-                                style={{ textAlign: h === "Closer" ? "left" : "center" }}>{h}</th>
-                            ))}
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {closerStats.map((c) => (
-                            <tr key={c.name} className="border-t border-gray-50 hover:bg-gray-50">
-                              <td className="px-4 py-3 font-semibold" style={{ color: NAVY }}>{c.name}</td>
-                              <td className="px-4 py-3 text-center"><CountBadge n={c.agendado}  color="#1D4ED8" bg="#DBEAFE" /></td>
-                              <td className="px-4 py-3 text-center"><CountBadge n={c.realizado} color="#15803D" bg="#DCFCE7" /></td>
-                              <td className="px-4 py-3 text-center"><CountBadge n={c.noshow}    color="#B45309" bg="#FEF3C7" /></td>
-                              <td className="px-4 py-3 text-center font-black text-base" style={{ color: NAVY }}>{c.total}</td>
-                            </tr>
-                          ))}
-                          {closerStats.every((c) => c.total === 0) && (
-                            <tr><td colSpan={5} className="px-5 py-10 text-center text-gray-400 text-sm">Nenhum agendamento ainda</td></tr>
-                          )}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-
-                  <div className="flex flex-col gap-4">
-                    <div className="bg-white rounded-xl shadow-sm overflow-hidden flex-1">
-                      <div className="px-5 py-4 border-b border-gray-100 font-semibold text-sm" style={{ color: NAVY }}>📊 Agendadores</div>
-                      {schedStats.map((s) => (
-                        <div key={s.name} className="px-5 py-3.5 border-b border-gray-50 last:border-0 flex items-center justify-between">
-                          <div>
-                            <div className="font-semibold text-sm" style={{ color: NAVY }}>{s.name}</div>
-                            <div className="text-xs text-gray-400">{s.role}</div>
-                          </div>
-                          <div className="font-black text-2xl" style={{ color: NAVY }}>{s.total}</div>
-                        </div>
-                      ))}
-                    </div>
-                    <button onClick={() => setTab("agendar")}
-                      className="w-full py-4 rounded-xl font-bold text-white flex items-center justify-center gap-2 text-sm"
-                      style={{ background: NAVY, border: "none", cursor: "pointer" }}>
-                      <IconPlus size={16} /> Novo Agendamento
-                    </button>
-                  </div>
-                </div>
-
-                {/* ── RANKINGS ── */}
-                <div className="bg-white rounded-xl shadow-sm p-4 flex flex-wrap items-center gap-3">
-                  <span className="font-semibold text-sm mr-1" style={{ color: NAVY }}>🏅 Ranking por:</span>
-                  <div className="flex gap-1 bg-gray-100 rounded-lg p-1">
-                    {[["reuniao","📆 Dia da reunião"],["agendamento","✍️ Dia do agendamento"]].map(([v, l]) => (
-                      <button key={v} onClick={() => setRankDateRef(v)}
-                        style={{
-                          background: rankDateRef === v ? GOLD : "transparent",
-                          color: rankDateRef === v ? NAVY : "#6B7280",
-                          border: "none", borderRadius: 6, padding: "6px 14px",
-                          fontSize: 13, fontWeight: 700, cursor: "pointer",
-                        }}>
-                        {l}
-                      </button>
-                    ))}
-                  </div>
-                  <div className="flex gap-1 bg-gray-100 rounded-lg p-1">
-                    {[["semana","Semana"],["mes","Mês"],["total","Total"]].map(([v, l]) => (
-                      <button key={v} onClick={() => setRankPeriod(v)}
-                        style={{
-                          background: rankPeriod === v ? NAVY : "transparent",
-                          color: rankPeriod === v ? "#fff" : "#6B7280",
-                          border: "none", borderRadius: 6, padding: "6px 16px",
-                          fontSize: 13, fontWeight: 700, cursor: "pointer",
-                        }}>
-                        {l}
-                      </button>
-                    ))}
-                  </div>
-                  {rankPeriod === "semana" && (
-                    <select value={rankWeek} onChange={(e) => setRankWeek(e.target.value)}
-                      className="border border-gray-200 rounded-lg px-3 py-2 text-sm bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500">
-                      {availableWeeks.map((w) => (
-                        <option key={w} value={w}>{weekLabel(new Date(w + "T00:00:00"))}</option>
-                      ))}
-                    </select>
-                  )}
-                  {rankPeriod === "mes" && (
-                    <select value={rankMonth} onChange={(e) => setRankMonth(e.target.value)}
-                      className="border border-gray-200 rounded-lg px-3 py-2 text-sm bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500">
-                      {availableMonths.map((mo) => (
-                        <option key={mo} value={mo}>{monthLabel(mo)}</option>
-                      ))}
-                    </select>
-                  )}
-                  <span className="text-xs text-gray-400 ml-auto">
-                    {rankDateRef === "agendamento" ? "Por dia do agendamento" : "Por dia da reunião"} · <strong style={{ color: NAVY }}>{periodoTexto}</strong>
-                  </span>
-                </div>
-
-                <div className="grid gap-5 md:grid-cols-2">
-                  {/* Ranking agendadores */}
-                  <div className="bg-white rounded-xl shadow-sm overflow-hidden">
-                    <div className="px-5 py-4 border-b border-gray-100 flex items-center gap-2">
-                      <span style={{ background: "#FBF3E3", color: "#8B6914", borderRadius: 6, padding: "3px 10px", fontSize: 11, fontWeight: 700 }}>RANKING</span>
-                      <span className="font-semibold text-sm" style={{ color: NAVY }}>🏆 Quem mais agendou</span>
-                    </div>
-                    <div className="p-2">
-                      {rankAgendadores.map((s, i) => {
-                        const max = rankAgendadores[0].total || 1;
-                        const pct = Math.round((s.total / max) * 100);
-                        return (
-                          <div key={s.name} className="flex items-center gap-3 px-3 py-2.5">
-                            <span style={{ fontSize: i < 3 ? 18 : 13, fontWeight: 800, color: i < 3 ? NAVY : "#9CA3AF", minWidth: 28, textAlign: "center" }}>{medalha(i)}</span>
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center justify-between mb-1">
-                                <span className="font-semibold text-sm truncate" style={{ color: NAVY }}>{s.name} <span className="text-xs text-gray-400 font-normal">· {s.role}</span></span>
-                                <span className="font-black text-sm ml-2" style={{ color: NAVY }}>{s.total}</span>
-                              </div>
-                              <div style={{ height: 6, background: "#F3F4F6", borderRadius: 99, overflow: "hidden" }}>
-                                <div style={{ height: "100%", width: `${pct}%`, background: GOLD, borderRadius: 99, transition: "width 0.4s" }}></div>
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-
-                  {/* Ranking closers por realizadas */}
-                  <div className="bg-white rounded-xl shadow-sm overflow-hidden">
-                    <div className="px-5 py-4 border-b border-gray-100 flex items-center gap-2">
-                      <span style={{ background: "#DCFCE7", color: "#15803D", borderRadius: 6, padding: "3px 10px", fontSize: 11, fontWeight: 700 }}>RANKING</span>
-                      <span className="font-semibold text-sm" style={{ color: NAVY }}>✅ Closers — reuniões realizadas</span>
-                    </div>
-                    <div className="p-2">
-                      {rankClosers.map((c, i) => {
-                        const max = rankClosers[0].realizado || 1;
-                        const pct = Math.round((c.realizado / max) * 100);
-                        return (
-                          <div key={c.name} className="flex items-center gap-3 px-3 py-2.5">
-                            <span style={{ fontSize: i < 3 ? 18 : 13, fontWeight: 800, color: i < 3 ? NAVY : "#9CA3AF", minWidth: 28, textAlign: "center" }}>{medalha(i)}</span>
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center justify-between mb-1">
-                                <span className="font-semibold text-sm truncate" style={{ color: NAVY }}>{c.name}</span>
-                                <span className="font-black text-sm ml-2" style={{ color: "#15803D" }}>{c.realizado}</span>
-                              </div>
-                              <div style={{ height: 6, background: "#F3F4F6", borderRadius: 99, overflow: "hidden" }}>
-                                <div style={{ height: "100%", width: `${pct}%`, background: "#22C55E", borderRadius: 99, transition: "width 0.4s" }}></div>
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="bg-white rounded-xl shadow-sm overflow-hidden">
-                  <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
-                    <span className="font-semibold text-sm" style={{ color: NAVY }}>🕑 Últimos Agendamentos</span>
-                    {meetings.length > 0 && (
-                      <button onClick={() => setTab("agenda")} className="text-xs flex items-center gap-0.5 font-semibold"
-                        style={{ color: GOLD, background: "none", border: "none", cursor: "pointer" }}>
-                        Ver todos <IconChevron size={12} />
-                      </button>
-                    )}
-                  </div>
-                  {meetings.slice(0, 6).map((m) => (
-                    <div key={m.id} className="px-5 py-3.5 border-b border-gray-50 last:border-0 flex items-center justify-between">
-                      <div>
-                        <span className="font-semibold text-sm" style={{ color: NAVY }}>{m.clientName}</span>
-                        <span className="text-xs text-gray-400 ml-3">{TYPE_CONFIG[m.type || "reuniao"].icon} {fmtDate(m.date)} {m.time} · Closer: {m.closer} · {m.schedulerName}</span>
-                      </div>
-                      <StatusBadge status={m.status} />
-                    </div>
-                  ))}
-                  {meetings.length === 0 && (
-                    <div className="py-12 text-center text-sm text-gray-400">
-                      Nenhum agendamento ainda.{" "}
-                      <button onClick={() => setTab("agendar")} style={{ color: NAVY, background: "none", border: "none", cursor: "pointer", fontWeight: 700 }}>Criar agora →</button>
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {/* AGENDAR */}
-            {tab === "agendar" && (
-              <div className="max-w-lg mx-auto">
-                <div className="bg-white rounded-2xl shadow-lg overflow-hidden">
-                  <div className="px-8 py-7 relative overflow-hidden" style={{ background: NAVY }}>
-                    <div style={{ position: "absolute", right: -24, top: -24, width: 130, height: 130, borderRadius: "50%", background: "rgba(197,162,74,0.12)" }}></div>
-                    <IconPlus size={18} />
-                    <h2 className="text-white font-black text-xl mt-2">Novo Agendamento</h2>
-                    <p className="text-xs mt-1" style={{ color: "rgba(255,255,255,0.45)" }}>Registre uma consulta para os closers</p>
-                  </div>
-
-                  {formOk && (
-                    <div className="px-8 py-3 flex items-center gap-2 text-sm font-bold border-b-2" style={{ background: "#DCFCE7", color: "#15803D", borderColor: "#86EFAC" }}>
-                      <IconCheck size={15} /> Agendamento salvo! Redirecionando...
-                    </div>
-                  )}
-                  {formErr && (
-                    <div className="px-8 py-3 flex items-center gap-2 text-sm font-bold border-b-2" style={{ background: "#FEE2E2", color: "#B91C1C", borderColor: "#FCA5A5" }}>
-                      <IconAlert size={15} /> {formErr}
-                    </div>
-                  )}
-
-                  <div className="px-8 py-7 space-y-5">
-                    {/* Tipo: Reunião ou Consulta */}
-                    <div>
-                      <label className={labelCls}>Tipo de atendimento *</label>
-                      <div className="grid grid-cols-2 gap-3">
-                        {Object.entries(TYPE_CONFIG).map(([key, t]) => {
-                          const active = form.type === key;
-                          return (
-                            <button key={key} type="button" onClick={() => setF("type", key)}
-                              className="flex items-center justify-center gap-2 py-3 rounded-xl font-bold text-sm transition-all"
-                              style={{
-                                border: active ? `2px solid ${t.color}` : "2px solid #E5E7EB",
-                                background: active ? t.bg : "#FAFAFA",
-                                color: active ? t.color : "#9CA3AF",
-                                cursor: "pointer",
-                              }}>
-                              <span style={{ fontSize: 18 }}>{t.icon}</span> {t.label}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className={labelCls}>Agendador *</label>
-                        <select value={form.schedulerName}
-                          onChange={(e) => {
-                            const n = e.target.value;
-                            const s = ALL_SCHEDULERS.find((x) => x.name === n);
-                            setForm((f) => ({ ...f, schedulerName: n, schedulerRole: s ? s.role : "" }));
-                          }} className={inputCls}>
-                          <option value="">Selecione...</option>
-                          <optgroup label="SDR">{TEAM.SDR.map((n) => <option key={n} value={n}>{n}</option>)}</optgroup>
-                          <optgroup label="Social Seller">{TEAM["Social Seller"].map((n) => <option key={n} value={n}>{n}</option>)}</optgroup>
-                        </select>
-                        {form.schedulerRole && <div className="mt-1 text-xs font-bold" style={{ color: GOLD }}>{form.schedulerRole}</div>}
-                      </div>
-                      <div>
-                        <label className={labelCls}>Closer *</label>
-                        <select value={form.closer} onChange={(e) => setF("closer", e.target.value)} className={inputCls}>
-                          <option value="">Selecione...</option>
-                          {CLOSERS.map((c) => <option key={c} value={c}>{c}</option>)}
-                        </select>
-                      </div>
-                    </div>
-
-                    <div>
-                      <label className={labelCls}>Nome do Cliente *</label>
-                      <input type="text" placeholder="Nome completo" value={form.clientName} onChange={(e) => setF("clientName", e.target.value)} className={inputCls} />
-                    </div>
-                    <div>
-                      <label className={labelCls}>WhatsApp do Cliente</label>
-                      <div className="flex gap-2">
-                        <select
-                          value={form.clientPhoneCountry}
-                          onChange={(e) => setF("clientPhoneCountry", e.target.value)}
-                          className="border border-gray-200 rounded-lg px-2 py-2.5 text-sm bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                          style={{ maxWidth: 130 }}>
-                          {COUNTRY_CODES.map((c, i) => <option key={i} value={c.code}>{c.label}</option>)}
-                        </select>
-                        <input type="tel" placeholder="11 99999-9999" value={form.clientPhone}
-                          onChange={(e) => setF("clientPhone", e.target.value)} className={inputCls + " flex-1"} />
-                      </div>
-                    </div>
-                    <div>
-                      <label className={labelCls}>Data do agendamento *</label>
-                      <input type="date" value={form.bookingDate} onChange={(e) => setF("bookingDate", e.target.value)} className={inputCls} />
-                      <div className="mt-1 text-xs text-gray-400">Dia em que a reunião foi marcada</div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className={labelCls}>Data da reunião *</label>
-                        <input type="date" value={form.date} onChange={(e) => setF("date", e.target.value)} className={inputCls} />
-                      </div>
-                      <div>
-                        <label className={labelCls}>Horário *</label>
-                        <input type="time" value={form.time} onChange={(e) => setF("time", e.target.value)} className={inputCls} />
-                      </div>
-                    </div>
-                    <div>
-                      <label className={labelCls}>Observações</label>
-                      <textarea placeholder="Contexto do lead, urgência, tipo de caso..." value={form.notes}
-                        onChange={(e) => setF("notes", e.target.value)} rows={3} className={inputCls} style={{ resize: "vertical" }}></textarea>
-                    </div>
-
-                    <button onClick={handleSubmit} disabled={saving}
-                      className="w-full py-3.5 rounded-xl font-black text-white text-base flex items-center justify-center gap-2"
-                      style={{ background: NAVY, border: "none", cursor: saving ? "not-allowed" : "pointer", opacity: saving ? 0.7 : 1 }}>
-                      {saving ? "Salvando..." : <>Confirmar Agendamento <IconChevron size={16} /></>}
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* AGENDA */}
-            {tab === "agenda" && (
-              <div className="space-y-5">
-                <div className="bg-white rounded-xl shadow-sm p-5">
-                  <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-                    {[
-                      { label: "Tipo", val: fType, set: setFType, opts: [["todos","Todos"],["reuniao","Reunião"],["consulta","Consulta"]] },
-                      { label: "Closer", val: fCloser, set: setFCloser, opts: [["todos","Todos"], ...CLOSERS.map((c) => [c, c])] },
-                      { label: "Status", val: fStatus, set: setFStatus, opts: [["todos","Todos"],["agendado","Agendado"],["realizado","Realizado"],["cancelado","Cancelado"],["noshow","No-show"]] },
-                      { label: "Agendador", val: fSched, set: setFSched, opts: [["todos","Todos"], ...ALL_SCHEDULERS.map((s) => [s.name, `${s.name} (${s.role})`])] },
-                      { label: "Ordenar", val: sortBy, set: setSortBy, opts: [["date_asc","Data ↑"],["date_desc","Data ↓"],["created","Mais recentes"]] },
-                    ].map(({ label, val, set, opts }) => (
-                      <div key={label}>
-                        <div className={labelCls}>{label}</div>
-                        <select value={val} onChange={(e) => set(e.target.value)} className={inputCls}>
-                          {opts.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-                        </select>
-                      </div>
-                    ))}
-                  </div>
-                  <div className="mt-4 flex items-center justify-between">
-                    <span className="text-xs text-gray-400">{filtered.length} resultado(s)</span>
-                    <div className="flex gap-2">
-                      <button onClick={exportarExcel} className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold"
-                        style={{ background: "#fff", color: "#15803D", border: "1px solid #86EFAC", cursor: "pointer" }}>
-                        <IconDownload size={13} /> Baixar Excel
-                      </button>
-                      <button onClick={() => setTab("agendar")} className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold text-white"
-                        style={{ background: NAVY, border: "none", cursor: "pointer" }}>
-                        <IconPlus size={13} /> Novo
-                      </button>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="space-y-3">
-                  {filtered.map((m) => {
-                    const sc = STATUS_CONFIG[m.status] || STATUS_CONFIG.agendado;
-                    const dayNum = m.date ? m.date.split("-")[2] : "—";
-                    const monStr = m.date ? MONTHS[parseInt(m.date.split("-")[1]) - 1] : "";
-                    return (
-                      <div key={m.id} className="bg-white rounded-xl shadow-sm" style={{ borderLeft: `4px solid ${sc.border}` }}>
-                        <div className="p-5 flex items-start gap-4">
-                        <div className="bg-gray-50 rounded-xl p-3 text-center shrink-0" style={{ minWidth: 56 }}>
-                          <div className="font-black text-2xl leading-none" style={{ color: NAVY }}>{dayNum}</div>
-                          <div className="text-gray-400 text-xs uppercase mt-0.5">{monStr}</div>
-                          <div className="font-bold text-xs mt-2 text-gray-600">{m.time || "—"}</div>
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2.5 mb-2 flex-wrap">
-                            <span className="font-black text-base" style={{ color: NAVY }}>{m.clientName}</span>
-                            <StatusBadge status={m.status} />
-                            {(() => {
-                              const t = TYPE_CONFIG[m.type || "reuniao"];
-                              return (
-                                <span style={{ background: t.bg, color: t.color, borderRadius: 99, padding: "2px 10px", fontSize: 11, fontWeight: 700, whiteSpace: "nowrap" }}>
-                                  {t.icon} {t.label}
-                                </span>
-                              );
-                            })()}
-                            {m.rescheduleCount > 0 && (
-                              <span style={{ background: "#FEF3C7", color: "#B45309", borderRadius: 99, padding: "2px 10px", fontSize: 11, fontWeight: 700, whiteSpace: "nowrap" }}>
-                                🔄 Reagendado {m.rescheduleCount}x
-                              </span>
-                            )}
-                          </div>
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1">
-                            <span className="flex items-center gap-1.5 text-xs text-gray-500"><IconUser size={11} /> Closer: <strong style={{ color: NAVY, marginLeft: 2 }}>{m.closer}</strong></span>
-                            <span className="flex items-center gap-1.5 text-xs text-gray-500"><IconClock size={11} /> Por: <strong style={{ color: NAVY, marginLeft: 2 }}>{m.schedulerName}</strong> <span className="text-gray-400 ml-1">({m.schedulerRole})</span></span>
-                            <span className="flex items-center gap-1.5 text-xs text-gray-500"><IconCalendar size={11} /> Agendado em: <strong style={{ color: NAVY, marginLeft: 2 }}>{fmtDate(bookingOf(m))}</strong></span>
-                            {m.clientPhone && <span className="flex items-center gap-1.5 text-xs text-gray-500"><IconPhone size={11} /> {m.clientPhone}</span>}
-                          </div>
-                          {m.notes && (
-                            <div className="mt-2.5 bg-gray-50 rounded-lg px-3 py-2 text-xs text-gray-500 flex items-start gap-1.5">
-                              <IconNote size={11} /> {m.notes}
-                            </div>
-                          )}
-                        </div>
-                        <div className="flex flex-col gap-2 shrink-0">
-                          <select value={m.status} onChange={(e) => updateStatus(m.id, e.target.value)}
-                            className="border border-gray-200 rounded-lg px-2 py-1.5 text-xs font-bold cursor-pointer bg-gray-50 outline-none" style={{ color: NAVY }}>
-                            <option value="agendado">Agendado</option>
-                            <option value="realizado">Realizado</option>
-                            <option value="cancelado">Cancelado</option>
-                            <option value="noshow">No-show</option>
-                          </select>
-                          <button onClick={() => (editId === m.id ? (setEditId(null), setEditForm(null)) : abrirEditar(m))}
-                            className="flex items-center justify-center gap-1 border rounded-lg px-2 py-1.5 text-xs font-semibold hover:bg-blue-50"
-                            style={{ borderColor: "#93C5FD", color: "#1D4ED8", background: editId === m.id ? "#DBEAFE" : "none", cursor: "pointer" }}>
-                            <IconEdit size={11} /> Editar
-                          </button>
-                          <button onClick={() => (reschedId === m.id ? setReschedId(null) : abrirReagendar(m))}
-                            className="flex items-center justify-center gap-1 border rounded-lg px-2 py-1.5 text-xs font-semibold hover:bg-amber-50"
-                            style={{ borderColor: "#FCD34D", color: "#B45309", background: reschedId === m.id ? "#FEF3C7" : "none", cursor: "pointer" }}>
-                            <IconRefresh size={11} /> Reagendar
-                          </button>
-                          <button onClick={() => removeMeeting(m.id)}
-                            className="flex items-center justify-center gap-1 border rounded-lg px-2 py-1.5 text-xs font-semibold hover:bg-red-50"
-                            style={{ borderColor: "#FCA5A5", color: "#B91C1C", background: "none", cursor: "pointer" }}>
-                            <IconTrash size={11} /> Remover
-                          </button>
-                        </div>
-                        </div>
-
-                        {/* Painel de reagendamento */}
-                        {reschedId === m.id && (
-                          <div className="px-5 pb-5 pt-1">
-                            <div className="rounded-xl p-4" style={{ background: "#FFFBEB", border: "1px solid #FCD34D" }}>
-                              <div className="flex items-center gap-2 mb-3 text-sm font-bold" style={{ color: "#B45309" }}>
-                                <IconRefresh size={14} /> Reagendar reunião de {m.clientName}
-                              </div>
-                              <div className="flex flex-wrap items-end gap-3">
-                                <div>
-                                  <label className="block text-xs font-bold uppercase tracking-wide text-gray-500 mb-1.5">Nova data</label>
-                                  <input type="date" value={reschedDate} onChange={(e) => setReschedDate(e.target.value)}
-                                    className="border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-amber-400" />
-                                </div>
-                                <div>
-                                  <label className="block text-xs font-bold uppercase tracking-wide text-gray-500 mb-1.5">Novo horário</label>
-                                  <input type="time" value={reschedTime} onChange={(e) => setReschedTime(e.target.value)}
-                                    className="border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-amber-400" />
-                                </div>
-                                <button onClick={() => confirmarReagendar(m)}
-                                  className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-bold text-white"
-                                  style={{ background: "#B45309", border: "none", cursor: "pointer" }}>
-                                  <IconCheck size={13} /> Confirmar
-                                </button>
-                                <button onClick={() => setReschedId(null)}
-                                  className="px-4 py-2 rounded-lg text-sm font-semibold"
-                                  style={{ border: "1px solid #E5E7EB", color: "#6B7280", background: "#fff", cursor: "pointer" }}>
-                                  Cancelar
-                                </button>
-                              </div>
-                              <div className="mt-2 text-xs text-gray-400">A reunião volta para o status "Agendado" na nova data.</div>
-                            </div>
-                          </div>
-                        )}
-
-                        {/* Painel de edição completa */}
-                        {editId === m.id && editForm && (
-                          <div className="px-5 pb-5 pt-1">
-                            <div className="rounded-xl p-4" style={{ background: "#EFF6FF", border: "1px solid #93C5FD" }}>
-                              <div className="flex items-center gap-2 mb-4 text-sm font-bold" style={{ color: "#1D4ED8" }}>
-                                <IconEdit size={14} /> Editar agendamento de {m.clientName}
-                              </div>
-
-                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div>
-                                  <label className={labelCls}>Tipo *</label>
-                                  <div className="flex gap-2">
-                                    {Object.entries(TYPE_CONFIG).map(([key, t]) => {
-                                      const active = editForm.type === key;
-                                      return (
-                                        <button key={key} type="button" onClick={() => setEF("type", key)}
-                                          className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg font-bold text-xs"
-                                          style={{ border: active ? `2px solid ${t.color}` : "2px solid #E5E7EB", background: active ? t.bg : "#fff", color: active ? t.color : "#9CA3AF", cursor: "pointer" }}>
-                                          {t.icon} {t.label}
-                                        </button>
-                                      );
-                                    })}
-                                  </div>
-                                </div>
-                                <div>
-                                  <label className={labelCls}>Closer *</label>
-                                  <select value={editForm.closer} onChange={(e) => setEF("closer", e.target.value)} className={inputCls + " bg-white"}>
-                                    <option value="">Selecione...</option>
-                                    {CLOSERS.map((c) => <option key={c} value={c}>{c}</option>)}
-                                  </select>
-                                </div>
-                                <div>
-                                  <label className={labelCls}>Agendador *</label>
-                                  <select value={editForm.schedulerName}
-                                    onChange={(e) => { const n = e.target.value; const s = ALL_SCHEDULERS.find((x) => x.name === n); setEditForm((f) => ({ ...f, schedulerName: n, schedulerRole: s ? s.role : "" })); }}
-                                    className={inputCls + " bg-white"}>
-                                    <option value="">Selecione...</option>
-                                    <optgroup label="SDR">{TEAM.SDR.map((n) => <option key={n} value={n}>{n}</option>)}</optgroup>
-                                    <optgroup label="Social Seller">{TEAM["Social Seller"].map((n) => <option key={n} value={n}>{n}</option>)}</optgroup>
-                                  </select>
-                                </div>
-                                <div>
-                                  <label className={labelCls}>Nome do Cliente *</label>
-                                  <input type="text" value={editForm.clientName} onChange={(e) => setEF("clientName", e.target.value)} className={inputCls + " bg-white"} />
-                                </div>
-                                <div className="md:col-span-2">
-                                  <label className={labelCls}>WhatsApp do Cliente</label>
-                                  <div className="flex gap-2">
-                                    <select value={editForm.clientPhoneCountry} onChange={(e) => setEF("clientPhoneCountry", e.target.value)}
-                                      className="border border-gray-200 rounded-lg px-2 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500" style={{ maxWidth: 130 }}>
-                                      {COUNTRY_CODES.map((c, i) => <option key={i} value={c.code}>{c.label}</option>)}
-                                    </select>
-                                    <input type="tel" value={editForm.clientPhone} onChange={(e) => setEF("clientPhone", e.target.value)} className={inputCls + " bg-white flex-1"} />
-                                  </div>
-                                </div>
-                                <div>
-                                  <label className={labelCls}>Data do agendamento *</label>
-                                  <input type="date" value={editForm.bookingDate} onChange={(e) => setEF("bookingDate", e.target.value)} className={inputCls + " bg-white"} />
-                                </div>
-                                <div className="grid grid-cols-2 gap-3">
-                                  <div>
-                                    <label className={labelCls}>Data da reunião *</label>
-                                    <input type="date" value={editForm.date} onChange={(e) => setEF("date", e.target.value)} className={inputCls + " bg-white"} />
-                                  </div>
-                                  <div>
-                                    <label className={labelCls}>Horário *</label>
-                                    <input type="time" value={editForm.time} onChange={(e) => setEF("time", e.target.value)} className={inputCls + " bg-white"} />
-                                  </div>
-                                </div>
-                                <div className="md:col-span-2">
-                                  <label className={labelCls}>Observações</label>
-                                  <textarea value={editForm.notes} onChange={(e) => setEF("notes", e.target.value)} rows={2} className={inputCls + " bg-white"} style={{ resize: "vertical" }}></textarea>
-                                </div>
-                              </div>
-
-                              <div className="flex gap-2 mt-4">
-                                <button onClick={() => salvarEdicao(m)}
-                                  className="flex items-center gap-1.5 px-5 py-2 rounded-lg text-sm font-bold text-white"
-                                  style={{ background: "#1D4ED8", border: "none", cursor: "pointer" }}>
-                                  <IconCheck size={13} /> Salvar alterações
-                                </button>
-                                <button onClick={() => { setEditId(null); setEditForm(null); }}
-                                  className="px-5 py-2 rounded-lg text-sm font-semibold"
-                                  style={{ border: "1px solid #E5E7EB", color: "#6B7280", background: "#fff", cursor: "pointer" }}>
-                                  Cancelar
-                                </button>
-                              </div>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                  {filtered.length === 0 && (
-                    <div className="bg-white rounded-xl shadow-sm py-20 text-center">
-                      <div style={{ fontSize: 48 }}>📭</div>
-                      <div className="text-gray-400 text-sm mt-3">Nenhum agendamento encontrado</div>
-                      <button onClick={() => setTab("agendar")} className="mt-3 text-sm font-bold underline" style={{ color: NAVY, background: "none", border: "none", cursor: "pointer" }}>Criar agendamento →</button>
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-          </main>
+<!-- ════════════════════════════════ LOGIN ════════════════════════════════ -->
+<div id="loginPage" role="main">
+  <div class="login-card">
+    <div class="login-logo" aria-label="Marcondes Madureira Advocacia">
+      <div class="brand">MARCONDES MADUREIRA</div>
+      <div class="gold-bar" aria-hidden="true"></div>
+      <div class="sub">Advocacia</div>
+      <div class="tagline">Sistema de Controle de Ponto</div>
+    </div>
+    <h2>Acesse sua conta</h2>
+    <div class="field">
+      <label for="lUser">Usuário</label>
+      <!-- ✅ FIX 4: autocomplete correto nos campos de login -->
+      <input id="lUser" type="text" placeholder="seu usuário" autocomplete="username" aria-required="true">
+    </div>
+    <div class="field">
+      <label for="lPass">Senha</label>
+      <input id="lPass" type="password" placeholder="••••••••" autocomplete="current-password" aria-required="true">
+    </div>
+    <!-- ✅ FIX 5: role="alert" para leitores de tela anunciarem o erro -->
+    <div id="lErr" class="error-msg hidden" role="alert" aria-live="assertive"></div>
+    <!-- ✅ FIX 6: type="button" em todos os botões -->
+    <button type="button" id="loginBtn" class="btn btn-navy btn-full" style="margin-top:1.1rem" onclick="doLogin()" disabled>Conectando...</button>
+  </div>
+</div>
+
+<!-- ═══════════════════════════ EMPLOYEE APP ═══════════════════════════ -->
+<div id="empApp" class="hidden" role="main">
+  <header class="header" role="banner">
+    <div class="header-brand">
+      <div class="name">MMADV</div>
+      <div class="role">CONTROLE DE PONTO</div>
+    </div>
+    <div class="header-right">
+      <span class="pill" id="empPill" aria-label="Usuário logado"></span>
+      <button type="button" class="btn btn-ghost btn-sm" onclick="doLogout()" aria-label="Sair do sistema">Sair</button>
+    </div>
+  </header>
+
+  <main class="main">
+    <!-- Relógio -->
+    <div class="clock-card" aria-label="Relógio e registro de ponto">
+      <div class="clock-date" id="empDate" aria-live="polite"></div>
+      <div class="clock-time" id="empTime" aria-live="off">00:00:00</div>
+      <div class="punch-row" role="group" aria-label="Registrar ponto">
+        <button type="button" class="btn-punch btn-entrada" onclick="punch('in')"  aria-label="Registrar entrada">⬆ Entrada</button>
+        <button type="button" class="btn-punch btn-saida"   onclick="punch('out')" aria-label="Registrar saída">⬇ Saída</button>
+      </div>
+      <button type="button" class="btn-adj" onclick="openAdjModal()" aria-label="Solicitar ajuste de ponto">✎ Solicitar Ajuste</button>
+    </div>
+
+    <div class="section-title">Meu banco de horas (semana atual)</div>
+    <div class="bh-grid" id="empBhSummary" aria-live="polite"></div>
+
+    <div class="section-title">Registros de hoje</div>
+    <div class="card" role="region" aria-label="Registros de hoje">
+      <div id="todayList"><div class="empty">Nenhum registro hoje.</div></div>
+    </div>
+
+    <div class="section-title">Minhas solicitações de ajuste</div>
+    <div class="card" role="region" aria-label="Solicitações de ajuste">
+      <div id="myAdjList"><div class="empty">Nenhuma solicitação.</div></div>
+    </div>
+
+    <div class="section-title" style="display:flex;align-items:center;justify-content:space-between">
+      <span>Histórico</span>
+      <label for="empHistMonth" style="display:flex;align-items:center;gap:.4rem;font-size:.75rem;font-weight:700;color:var(--gray-500);text-transform:uppercase;letter-spacing:.5px">
+        Mês:
+        <input type="month" id="empHistMonth" onchange="renderEmpView()" style="padding:.3rem .6rem;border:1.5px solid var(--gray-200);border-radius:7px;font-family:inherit;font-size:.83rem" aria-label="Filtrar histórico por mês">
+      </label>
+    </div>
+    <div class="card" role="region" aria-label="Histórico de registros">
+      <div id="histList"><div class="empty">Nenhum registro no período.</div></div>
+    </div>
+  </main>
+</div>
+
+<!-- ════════════════════════════ ADMIN APP ════════════════════════════ -->
+<div id="adminApp" class="hidden" role="main">
+  <header class="header" role="banner">
+    <div class="header-brand">
+      <div class="name">MMADV</div>
+      <div class="role">ADMINISTRADOR</div>
+    </div>
+    <div class="header-right">
+      <span class="pill" aria-label="Perfil administrador">⚙ Admin</span>
+      <button type="button" class="btn btn-ghost btn-sm" onclick="doLogout()" aria-label="Sair do sistema">Sair</button>
+    </div>
+  </header>
+
+  <main class="main">
+    <!-- ✅ FIX 7: role="tablist" + aria-selected nas abas -->
+    <div class="tabs" role="tablist" aria-label="Navegação do painel">
+      <button type="button" class="tab active" id="tOverview"    role="tab" aria-selected="true"  aria-controls="pOverview"    onclick="switchTab('overview')">📊 Geral</button>
+      <button type="button" class="tab"        id="tAdjustments" role="tab" aria-selected="false" aria-controls="pAdjustments" onclick="switchTab('adjustments')">🔄 Ajustes<span id="adjBadge" class="notif hidden" aria-label="Ajustes pendentes"></span></button>
+      <button type="button" class="tab"        id="tRecords"     role="tab" aria-selected="false" aria-controls="pRecords"     onclick="switchTab('records')">📋 Registros</button>
+      <button type="button" class="tab"        id="tBanco"       role="tab" aria-selected="false" aria-controls="pBanco"       onclick="switchTab('banco')">🏦 Banco de Horas</button>
+      <button type="button" class="tab"        id="tUsers"       role="tab" aria-selected="false" aria-controls="pUsers"       onclick="switchTab('users')">👥 Colaboradores</button>
+    </div>
+
+    <!-- GERAL -->
+    <div id="pOverview" role="tabpanel" aria-labelledby="tOverview">
+      <div class="section-title">Situação de hoje</div>
+      <div class="summary-grid" id="adminSummary" aria-live="polite"></div>
+      <div class="section-title">Últimos registros</div>
+      <div class="card" role="region" aria-label="Últimos registros"><div id="recentRecs"></div></div>
+    </div>
+
+    <!-- AJUSTES -->
+    <div id="pAdjustments" class="hidden" role="tabpanel" aria-labelledby="tAdjustments">
+      <div class="section-title">Pendentes de aprovação</div>
+      <div id="pendList" aria-live="polite"></div>
+      <div class="section-title" style="margin-top:1.5rem">Processados</div>
+      <div id="procList"></div>
+    </div>
+
+    <!-- REGISTROS -->
+    <div id="pRecords" class="hidden" role="tabpanel" aria-labelledby="tRecords">
+      <div class="filter-bar" role="search" aria-label="Filtrar registros">
+        <label for="fEmp">Colaborador:</label>
+        <select id="fEmp" onchange="renderAdminRecs()" aria-label="Filtrar por colaborador"><option value="">Todos</option></select>
+        <label for="fMonth">Mês:</label>
+        <input type="month" id="fMonth" onchange="renderAdminRecs()" aria-label="Filtrar por mês">
+      </div>
+      <div class="card"><div id="allRecs" aria-live="polite"></div></div>
+    </div>
+
+    <!-- BANCO DE HORAS -->
+    <div id="pBanco" class="hidden" role="tabpanel" aria-labelledby="tBanco">
+      <div class="filter-bar" role="search" aria-label="Filtrar banco de horas">
+        <label for="bhEmp">Colaboradora:</label>
+        <select id="bhEmp" onchange="renderBanco()" aria-label="Selecionar colaboradora"></select>
+        <label for="bhMonth">Mês:</label>
+        <input type="month" id="bhMonth" onchange="renderBanco()" aria-label="Filtrar por mês">
+        <div style="margin-left:auto;display:flex;gap:.5rem">
+          <button type="button" class="btn btn-gold btn-sm" onclick="openBhAdjModal()">➕➖ Ajustar horas</button>
+          <button type="button" class="btn btn-outline btn-sm" onclick="openScheduleModal(($('bhEmp')||{}).value)">⏱ Editar jornada</button>
         </div>
-      );
-    }
+      </div>
 
-    ReactDOM.createRoot(document.getElementById("root")).render(<App />);
-  </script>
+      <div class="bh-grid" id="bhSummary" aria-live="polite"></div>
+
+      <div class="card">
+        <div class="card-header"><span class="card-title">Detalhamento diário</span></div>
+        <div class="bh-table-wrap">
+          <table class="bh-table">
+            <thead><tr>
+              <th>Data</th><th>Dia</th><th>Prevista</th><th>Batidas</th><th>Trabalhada</th><th>Ajuste manual</th><th>Saldo do dia</th><th>Saldo acumulado</th>
+            </tr></thead>
+            <tbody id="bhTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="section-title">Ajustes manuais lançados</div>
+      <div class="card" role="region" aria-label="Ajustes manuais de banco de horas">
+        <div id="bhAdjList" aria-live="polite"></div>
+      </div>
+    </div>
+
+    <!-- COLABORADORES -->
+    <div id="pUsers" class="hidden" role="tabpanel" aria-labelledby="tUsers">
+      <div class="section-title">Cadastrados</div>
+      <div id="usersList"></div>
+      <br>
+      <div class="card">
+        <div class="card-header"><span class="card-title">➕ Novo colaborador</span></div>
+        <div style="padding:1.2rem">
+          <div class="field">
+            <label for="nName">Nome completo</label>
+            <input id="nName" type="text" placeholder="Ex: Maria Fernanda" autocomplete="off">
+          </div>
+          <div class="field">
+            <label for="nId">Login (sem espaços ou acentos)</label>
+            <input id="nId" type="text" placeholder="Ex: mariafernanda" autocomplete="off">
+          </div>
+          <div class="field">
+            <label for="nPass">Senha inicial</label>
+            <input id="nPass" type="text" placeholder="Ex: mariafernanda123" autocomplete="off">
+          </div>
+          <div id="nErr" class="error-msg hidden" role="alert" aria-live="assertive"></div>
+          <button type="button" class="btn btn-navy" onclick="addUser()" style="margin-top:.5rem">Cadastrar</button>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- ═══════════════════════ MODAL AJUSTE ═══════════════════════ -->
+<div id="adjModal" class="overlay hidden" role="dialog" aria-modal="true" aria-labelledby="adjModalTitle">
+  <div class="modal">
+    <h2 class="modal-title" id="adjModalTitle">✎ Solicitar Ajuste de Ponto</h2>
+    <div class="field">
+      <label for="adjOrigRec">Registro a corrigir</label>
+      <select id="adjOrigRec" onchange="onAdjOrigChange()">
+        <option value="">➕ Não bati o ponto (lançar novo registro)</option>
+      </select>
+    </div>
+    <div id="adjOrigInfo" class="hidden" style="font-size:.8rem;color:var(--gray-500);margin:-.6rem 0 1rem;padding:.5rem .75rem;background:var(--gray-100);border-radius:7px"></div>
+    <div class="field">
+      <label for="adjType">Tipo de registro</label>
+      <select id="adjType">
+        <option value="in">Entrada</option>
+        <option value="out">Saída</option>
+      </select>
+    </div>
+    <div class="field">
+      <label for="adjDate">Data correta</label>
+      <input id="adjDate" type="date" aria-required="true">
+    </div>
+    <div class="field">
+      <label for="adjTime">Horário correto</label>
+      <input id="adjTime" type="time" aria-required="true">
+    </div>
+    <div class="field">
+      <label for="adjJust">Justificativa</label>
+      <textarea id="adjJust" placeholder="Descreva o motivo do ajuste..." aria-required="true"></textarea>
+    </div>
+    <div id="adjErr" class="error-msg hidden" role="alert" aria-live="assertive"></div>
+    <div class="modal-actions">
+      <button type="button" class="btn btn-ghost" onclick="closeAdjModal()">Cancelar</button>
+      <button type="button" class="btn btn-gold"  onclick="submitAdj()">Enviar Solicitação</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════ MODAL JORNADA ═══════════════════════ -->
+<div id="scheduleModal" class="overlay hidden" role="dialog" aria-modal="true" aria-labelledby="schModalTitle">
+  <div class="modal" style="max-width:560px">
+    <h2 class="modal-title" id="schModalTitle">⏱ Jornada de trabalho</h2>
+    <p style="font-size:.85rem;color:var(--gray-500);margin-bottom:1rem">Defina os horários de entrada/saída de cada dia. O que passar do previsto entra como hora extra; o que faltar entra como débito no banco de horas.</p>
+    <div id="schDays"></div>
+    <div class="field" style="margin-top:.75rem">
+      <label for="schTarget">Meta semanal (horas)</label>
+      <input id="schTarget" type="number" min="0" step="0.5" style="max-width:120px">
+      <div style="font-size:.75rem;color:var(--gray-500);margin-top:.3rem">Soma atual da jornada configurada: <strong id="schSum">0h</strong></div>
+    </div>
+    <div id="schErr" class="error-msg hidden" role="alert" aria-live="assertive"></div>
+    <div class="modal-actions">
+      <button type="button" class="btn btn-ghost" onclick="closeScheduleModal()">Cancelar</button>
+      <button type="button" class="btn btn-navy" onclick="saveSchedule()">Salvar jornada</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════ MODAL AJUSTE MANUAL DE HORAS ═══════════════════════ -->
+<div id="bhAdjModal" class="overlay hidden" role="dialog" aria-modal="true" aria-labelledby="bhAdjModalTitle">
+  <div class="modal">
+    <h2 class="modal-title" id="bhAdjModalTitle">➕➖ Ajustar banco de horas</h2>
+    <p style="font-size:.85rem;color:var(--gray-500);margin-bottom:1rem">Colaboradora: <strong id="bhAdjWho"></strong></p>
+    <div class="field">
+      <label for="bhAdjDate">Data de referência</label>
+      <input id="bhAdjDate" type="date" aria-required="true">
+    </div>
+    <div class="field">
+      <label for="bhAdjType">Tipo de ajuste</label>
+      <select id="bhAdjType">
+        <option value="add">➕ Adicionar horas ao banco</option>
+        <option value="remove">➖ Remover horas do banco</option>
+      </select>
+    </div>
+    <div class="field">
+      <label for="bhAdjHours">Quantidade de horas</label>
+      <input id="bhAdjHours" type="number" min="0.25" step="0.25" placeholder="Ex: 2" aria-required="true">
+    </div>
+    <div class="field">
+      <label for="bhAdjReason">Motivo</label>
+      <textarea id="bhAdjReason" placeholder="Ex: Compensação de feriado, correção de batida esquecida..." aria-required="true"></textarea>
+    </div>
+    <div id="bhAdjErr" class="error-msg hidden" role="alert" aria-live="assertive"></div>
+    <div class="modal-actions">
+      <button type="button" class="btn btn-ghost" onclick="closeBhAdjModal()">Cancelar</button>
+      <button type="button" class="btn btn-gold" onclick="submitBhAdj()">Salvar ajuste</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════ MODAL CONFIRM ═══════════════════════ -->
+<div id="confirmModal" class="overlay hidden" role="dialog" aria-modal="true" aria-labelledby="cfTitle">
+  <div class="modal">
+    <h2 class="modal-title" id="cfTitle">Confirmar</h2>
+    <div id="cfBody" style="font-size:.93rem;color:var(--gray-700)"></div>
+    <div class="modal-actions">
+      <button type="button" class="btn btn-ghost" onclick="closeCf()">Cancelar</button>
+      <button type="button" class="btn btn-red" id="cfBtn">Confirmar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ✅ FIX 8: aria-live no toast para leitores de tela -->
+<div id="toast" role="status" aria-live="polite" aria-atomic="true"></div>
+
+<script>
+'use strict';
+
+// ─────────────── FIREBASE (banco compartilhado entre dispositivos) ───────────────
+// Mesmo projeto usado no Agendamento — reaproveita a autenticação anônima já ativada lá.
+const firebaseConfig = {
+  apiKey:            "AIzaSyDHBmGuYWptEN-UFawXtA3ROiT2NuOjC3E",
+  authDomain:        "agendamentommadv-32dae.firebaseapp.com",
+  projectId:         "agendamentommadv-32dae",
+  storageBucket:     "agendamentommadv-32dae.firebasestorage.app",
+  messagingSenderId: "32241097932",
+  appId:             "1:32241097932:web:3459dc7d8eba9d93a77669",
+};
+firebase.initializeApp(firebaseConfig);
+const db   = firebase.firestore();
+const auth = firebase.auth();
+
+// Coleções deste app (prefixo "ponto_" para não colidir com o Agendamento)
+const COL = { U: 'ponto_users', R: 'ponto_records', A: 'ponto_adjs', BH: 'ponto_bh_adjs' };
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2);
+
+// ─────────────── CACHE EM MEMÓRIA (populado em tempo real pelo Firestore) ───────────────
+let USERS = [], RECORDS = [], ADJS = [], BHADJS = [];
+let bootReady = false;
+const getU = () => USERS;
+const getR = () => RECORDS;
+const getA = () => ADJS;
+const getBH = () => BHADJS;
+
+function sh(start, end) { return { start, end }; }
+function defaultSchedule() {
+  const mkDay = (enabled, shifts) => ({ enabled, shifts });
+  return {
+    weeklyTarget: 44,
+    days: {
+      dom: mkDay(false, []),
+      seg: mkDay(true,  [sh('08:00','12:00'), sh('13:00','18:00')]),
+      ter: mkDay(true,  [sh('08:00','12:00'), sh('13:00','18:00')]),
+      qua: mkDay(true,  [sh('08:00','12:00'), sh('13:00','18:00')]),
+      qui: mkDay(true,  [sh('08:00','12:00'), sh('13:00','18:00')]),
+      sex: mkDay(true,  [sh('08:00','12:00'), sh('13:00','18:00')]),
+      sab: mkDay(false, []),
+    },
+  };
+}
+
+// ─────────────── ESCRITAS (Firestore) ───────────────
+async function fsSetUser(userObj) {
+  await db.collection(COL.U).doc(userObj.id).set(userObj, { merge: true });
+}
+async function fsAddRecord(rec) {
+  await db.collection(COL.R).doc(rec.id).set(rec);
+}
+async function fsUpdateRecord(id, fields) {
+  await db.collection(COL.R).doc(id).update(fields);
+}
+async function fsAddAdj(adj) {
+  await db.collection(COL.A).doc(adj.id).set(adj);
+}
+async function fsUpdateAdj(id, fields) {
+  await db.collection(COL.A).doc(id).update(fields);
+}
+async function fsAddBhAdj(adj) {
+  await db.collection(COL.BH).doc(adj.id).set(adj);
+}
+async function fsDeleteBhAdj(id) {
+  await db.collection(COL.BH).doc(id).delete();
+}
+
+// ─────────────── DADOS INICIAIS ───────────────
+async function seedIfEmpty() {
+  const snap = await db.collection(COL.U).limit(1).get();
+  if (!snap.empty) return;
+  // ───────────────────────────────────────────────────────────
+  // COLABORADORAS  │ login = nome  │ senha = nome + "123"
+  // ADMINISTRADOR  │ login = admin │ senha = mmadv@admin
+  // Para alterar: painel Admin → Colaboradores → Redefinir senha
+  // ───────────────────────────────────────────────────────────
+  const today = todayStr();
+  const seed = [
+    { id: 'izabel', name: 'Izabel',        pass: 'izabel123',   role: 'employee', startDate: today, schedule: defaultSchedule() },
+    { id: 'kelly',  name: 'Kelly',          pass: 'kelly123',    role: 'employee', startDate: today, schedule: defaultSchedule() },
+    { id: 'admin',  name: 'Administrador',  pass: 'mmadv@admin', role: 'admin'    },
+  ];
+  const batch = db.batch();
+  seed.forEach(u => batch.set(db.collection(COL.U).doc(u.id), u));
+  await batch.commit();
+}
+
+// ─────────────── BOOT: autenticação + listeners em tempo real ───────────────
+function boot() {
+  auth.signInAnonymously().catch(err => console.error('Erro ao autenticar anonimamente:', err));
+
+  auth.onAuthStateChanged(async (user) => {
+    if (!user || bootReady) return;
+    bootReady = true;
+
+    try { await seedIfEmpty(); } catch (err) { console.error('Erro ao popular dados iniciais:', err); }
+
+    db.collection(COL.U).onSnapshot(
+      snap => {
+        USERS = snap.docs.map(d => d.data());
+        const btn = $('loginBtn');
+        if (btn) { btn.disabled = false; btn.textContent = 'Entrar'; }
+        onDataChanged();
+      },
+      err  => { console.error('Firebase error (users):', err); showConnError(); }
+    );
+    db.collection(COL.R).onSnapshot(
+      snap => { RECORDS = snap.docs.map(d => d.data()); onDataChanged(); },
+      err  => { console.error('Firebase error (records):', err); showConnError(); }
+    );
+    db.collection(COL.A).onSnapshot(
+      snap => { ADJS = snap.docs.map(d => d.data()); onDataChanged(); },
+      err  => { console.error('Firebase error (adjs):', err); showConnError(); }
+    );
+    db.collection(COL.BH).onSnapshot(
+      snap => { BHADJS = snap.docs.map(d => d.data()); onDataChanged(); },
+      err  => { console.error('Firebase error (bh adjs):', err); showConnError(); }
+    );
+  });
+}
+
+function showConnError() {
+  const el = $('lErr');
+  if (el && $('loginPage') && !$('loginPage').classList.contains('hidden')) {
+    el.textContent = 'Não foi possível conectar ao banco. Verifique sua conexão e tente novamente.';
+    show('lErr');
+  }
+}
+
+// Re-renderiza a tela atual sempre que os dados mudam (em tempo real, de qualquer dispositivo)
+function onDataChanged() {
+  if (!CU) return;
+  if (CU.role === 'admin') renderAdminView(); else renderEmpView();
+}
+
+// ─────────────── ESTADO ───────────────
+let CU = null;
+
+// ─────────────── UTILITÁRIOS ───────────────
+const $    = id  => document.getElementById(id);
+const show = id  => $(id)?.classList.remove('hidden');
+const hide = id  => $(id)?.classList.add('hidden');
+const p2   = n   => String(n).padStart(2, '0');
+const escHtml = s => {
+  const d = document.createElement('div');
+  d.textContent = s || '';
+  return d.innerHTML;
+};
+
+function fmtDT(iso) {
+  const d = new Date(iso);
+  return `${p2(d.getDate())}/${p2(d.getMonth()+1)}/${d.getFullYear()} ${p2(d.getHours())}:${p2(d.getMinutes())}`;
+}
+const todayStr = () => { const d = new Date(); return `${d.getFullYear()}-${p2(d.getMonth()+1)}-${p2(d.getDate())}`; };
+const monthStr = () => { const d = new Date(); return `${d.getFullYear()}-${p2(d.getMonth()+1)}`; };
+
+const DIAS   = ['Domingo','Segunda-feira','Terça-feira','Quarta-feira','Quinta-feira','Sexta-feira','Sábado'];
+const MESES  = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+const fmtFull = d => `${DIAS[d.getDay()]}, ${d.getDate()} de ${MESES[d.getMonth()]} de ${d.getFullYear()}`;
+
+// ─────────────── TOAST ───────────────
+let _tt;
+function toast(msg) {
+  const el = $('toast');
+  el.textContent = msg;
+  el.style.opacity = '1';
+  clearTimeout(_tt);
+  _tt = setTimeout(() => { el.style.opacity = '0'; }, 3200);
+}
+
+// ─────────────── RELÓGIO ───────────────
+function tick() {
+  const n  = new Date();
+  const de = $('empDate');
+  const te = $('empTime');
+  if (de) de.textContent = fmtFull(n);
+  if (te) te.textContent = `${p2(n.getHours())}:${p2(n.getMinutes())}:${p2(n.getSeconds())}`;
+}
+setInterval(tick, 1000);
+tick();
+
+// ─────────────── LOGIN / LOGOUT ───────────────
+function doLogin() {
+  const btn = $('loginBtn');
+  if (btn && btn.disabled) return; // ainda conectando ao banco
+  const id   = ($('lUser').value || '').trim().toLowerCase();
+  const pass = $('lPass').value || '';
+  const u = getU().find(x => x.id === id && x.pass === pass);
+  const errEl = $('lErr');
+
+  if (!u) {
+    errEl.textContent = 'Usuário ou senha incorretos.';
+    show('lErr');
+    $('lPass').value = '';
+    $('lPass').focus();
+    return;
+  }
+
+  hide('lErr');
+  CU = u;
+  hide('loginPage');
+
+  if (u.role === 'admin') {
+    show('adminApp');
+    renderAdminView();
+  } else {
+    show('empApp');
+    $('empPill').textContent = u.name;
+    const mEl = $('empHistMonth');
+    if (mEl && !mEl.value) mEl.value = monthStr();
+    renderEmpView();
+  }
+}
+
+function doLogout() {
+  CU = null;
+  hide('empApp');
+  hide('adminApp');
+  $('lUser').value = '';
+  $('lPass').value = '';
+  hide('lErr');
+  show('loginPage');
+  $('lUser').focus();
+}
+
+// Enter no login
+$('lPass').addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
+$('lUser').addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
+
+// ─────────────── PONTO ───────────────
+async function punch(type) {
+  const rec = {
+    id: uid(), userId: CU.id, userName: CU.name,
+    type, datetime: new Date().toISOString(), manual: false
+  };
+  try {
+    await fsAddRecord(rec);
+    toast(type === 'in' ? '✅ Entrada registrada com sucesso!' : '✅ Saída registrada com sucesso!');
+  } catch (err) {
+    console.error(err);
+    toast('⚠ Erro ao registrar. Verifique sua conexão.');
+  }
+}
+
+// ─────────────── VISÃO DO COLABORADOR ───────────────
+function renderEmpView() {
+  if (!CU) return;
+  renderToday();
+  renderMyAdj();
+  renderHist();
+  renderEmpBh();
+}
+
+function recHtml(r) {
+  return `<div class="rec">
+    <div class="dot ${r.type === 'in' ? 'dot-in' : 'dot-out'}" aria-hidden="true"></div>
+    <div class="rec-info">
+      <div class="rec-label">${r.type === 'in' ? '⬆ Entrada' : '⬇ Saída'}</div>
+      <div class="rec-time">${fmtDT(r.datetime)}</div>
+      ${r.correctedFrom ? `<div class="rec-time" style="text-decoration:line-through;color:var(--gray-500)">Original: ${fmtDT(r.correctedFrom)}</div>` : ''}
+    </div>
+    ${r.manual ? '<span class="badge badge-adj">Ajustado</span>' : ''}
+  </div>`;
+}
+
+function renderToday() {
+  const today = todayStr();
+  const rs = getR().filter(r => r.userId === CU.id && r.datetime.startsWith(today));
+  $('todayList').innerHTML = rs.length
+    ? rs.map(recHtml).join('')
+    : '<div class="empty">Nenhum registro hoje.</div>';
+}
+
+function renderMyAdj() {
+  const as = getA().filter(a => a.userId === CU.id).reverse();
+  if (!as.length) { $('myAdjList').innerHTML = '<div class="empty">Nenhuma solicitação.</div>'; return; }
+  const map = {
+    pending:  ['badge-pending',  '⏳ Aguardando'],
+    approved: ['badge-approved', '✅ Aprovado'],
+    rejected: ['badge-rejected', '❌ Recusado'],
+  };
+  $('myAdjList').innerHTML = as.map(a => {
+    const [cls, lbl] = map[a.status] || ['', ''];
+    return `<div class="rec">
+      <div class="dot ${a.type === 'in' ? 'dot-in' : 'dot-out'}" aria-hidden="true"></div>
+      <div class="rec-info">
+        <div class="rec-label">${a.type === 'in' ? 'Entrada' : 'Saída'} — ${a.reqDate} às ${a.reqTime}</div>
+        ${a.origDatetime ? `<div class="rec-time">Substitui o registro de ${fmtDT(a.origDatetime)}</div>` : `<div class="rec-time">Lançamento de registro ausente</div>`}
+        <div class="rec-time"><em>"${escHtml(a.just)}"</em></div>
+        ${a.note ? `<div class="rec-time" style="color:var(--red)">Resposta: ${escHtml(a.note)}</div>` : ''}
+      </div>
+      <span class="badge ${cls}" aria-label="${lbl}">${lbl}</span>
+    </div>`;
+  }).join('');
+}
+
+function renderHist() {
+  const m  = ($('empHistMonth') || {}).value || monthStr();
+  const rs = getR().filter(r => r.userId === CU.id && r.datetime.startsWith(m)).reverse();
+  $('histList').innerHTML = rs.length
+    ? rs.map(recHtml).join('')
+    : '<div class="empty">Nenhum registro neste período.</div>';
+}
+
+// ─────────────── MODAL AJUSTE ───────────────
+function openAdjModal() {
+  const now = new Date();
+
+  // Lista os registros da própria colaboradora (mais recentes primeiro) para
+  // que ela selecione EXATAMENTE qual batida deseja corrigir, em vez de
+  // digitar tipo/data/hora "no escuro".
+  const myRecs = getR()
+    .filter(r => r.userId === CU.id)
+    .slice()
+    .sort((a, b) => new Date(b.datetime) - new Date(a.datetime))
+    .slice(0, 60); // últimas 60 batidas é mais que suficiente
+
+  const sel = $('adjOrigRec');
+  sel.innerHTML = '<option value="">➕ Não bati o ponto (lançar novo registro)</option>' +
+    myRecs.map(r => {
+      const dt = fmtDT(r.datetime);
+      const lbl = r.type === 'in' ? 'Entrada' : 'Saída';
+      return `<option value="${r.id}">${lbl} — ${dt}</option>`;
+    }).join('');
+
+  sel.value = '';
+  $('adjType').disabled = false;
+  $('adjDate').disabled = false;
+  $('adjDate').value = `${now.getFullYear()}-${p2(now.getMonth()+1)}-${p2(now.getDate())}`;
+  $('adjTime').value = `${p2(now.getHours())}:${p2(now.getMinutes())}`;
+  $('adjJust').value = '';
+  hide('adjOrigInfo');
+  hide('adjErr');
+  show('adjModal');
+  setTimeout(() => sel.focus(), 50);
+}
+function closeAdjModal() { hide('adjModal'); }
+
+// Ao selecionar um registro existente, o tipo e a data ficam travados
+// (são os do registro original) e o horário sugerido vira o horário
+// batido — a colaboradora só precisa digitar o horário correto.
+function onAdjOrigChange() {
+  const id = $('adjOrigRec').value;
+  const infoEl = $('adjOrigInfo');
+  if (!id) {
+    $('adjType').disabled = false;
+    $('adjDate').disabled = false;
+    hide(infoEl.id);
+    return;
+  }
+  const rec = getR().find(r => r.id === id);
+  if (!rec) return;
+  const d = new Date(rec.datetime);
+  $('adjType').value = rec.type;
+  $('adjType').disabled = true;
+  $('adjDate').value = `${d.getFullYear()}-${p2(d.getMonth()+1)}-${p2(d.getDate())}`;
+  $('adjDate').disabled = true;
+  $('adjTime').value = `${p2(d.getHours())}:${p2(d.getMinutes())}`;
+  infoEl.textContent = `Horário batido atualmente: ${fmtDT(rec.datetime)}. Após a aprovação, esse registro será substituído pelo horário correto informado abaixo.`;
+  show(infoEl.id);
+  setTimeout(() => $('adjTime').focus(), 50);
+}
+
+async function submitAdj() {
+  const origId = $('adjOrigRec').value || null;
+  const type = $('adjType').value;
+  const date = $('adjDate').value;
+  const time = $('adjTime').value;
+  const just = ($('adjJust').value || '').trim();
+  const errEl = $('adjErr');
+
+  if (!date || !time || !just) {
+    errEl.textContent = 'Preencha todos os campos obrigatórios.';
+    show('adjErr');
+    return;
+  }
+
+  const origRec = origId ? getR().find(r => r.id === origId) : null;
+  const reqISO = new Date(`${date}T${time}:00`).toISOString();
+
+  if (origRec && reqISO === origRec.datetime) {
+    errEl.textContent = 'O horário correto informado é igual ao horário já batido. Informe o horário certo.';
+    show('adjErr');
+    return;
+  }
+
+  const a = {
+    id: uid(), userId: CU.id, userName: CU.name,
+    type,
+    reqDate: date.split('-').reverse().join('/'),
+    reqTime: time,
+    reqISO,
+    just, status: 'pending', note: '',
+    createdAt: new Date().toISOString(),
+    // Referência ao registro original a ser substituído (se houver)
+    origRecordId: origRec ? origRec.id : null,
+    origDatetime: origRec ? origRec.datetime : null,
+  };
+  try {
+    await fsAddAdj(a);
+    closeAdjModal();
+    toast('Solicitação enviada! Aguarde aprovação do administrador.');
+  } catch (err) {
+    console.error(err);
+    errEl.textContent = 'Erro ao enviar. Verifique sua conexão e tente novamente.';
+    show('adjErr');
+  }
+}
+
+// ─────────────── ADMIN — VISÃO GERAL ───────────────
+function renderAdminView() {
+  populateFilt();
+  populateBhFilter();
+  updateAdjBadge();
+  renderAdminOverview();
+  renderAdminAdj();
+  renderAdminRecs();
+  renderUsersList();
+  renderBanco();
+}
+
+function updateAdjBadge() {
+  const n = getA().filter(a => a.status === 'pending').length;
+  n > 0 ? show('adjBadge') : hide('adjBadge');
+  const tabBtn = $('tAdjustments');
+  if (tabBtn) tabBtn.setAttribute('aria-label', `Ajustes${n > 0 ? ` (${n} pendentes)` : ''}`);
+}
+
+// ✅ FIX 9: aria-selected atualizado ao trocar de aba
+function switchTab(t) {
+  const tabs = { overview: 'tOverview', adjustments: 'tAdjustments', records: 'tRecords', banco: 'tBanco', users: 'tUsers' };
+  const pans = { overview: 'pOverview', adjustments: 'pAdjustments', records: 'pRecords', banco: 'pBanco', users: 'pUsers' };
+  Object.keys(tabs).forEach(k => {
+    const tabEl = $(tabs[k]);
+    const panEl = $(pans[k]);
+    const active = k === t;
+    tabEl?.classList.toggle('active', active);
+    tabEl?.setAttribute('aria-selected', active ? 'true' : 'false');
+    panEl?.classList.toggle('hidden', !active);
+  });
+  if (t === 'records')     renderAdminRecs();
+  if (t === 'adjustments') renderAdminAdj();
+  if (t === 'users')       renderUsersList();
+  if (t === 'banco')       renderBanco();
+}
+
+function renderAdminOverview() {
+  const users = getU().filter(u => u.role === 'employee');
+  const today = todayStr();
+  const rs = getR();
+
+  $('adminSummary').innerHTML = users.map(u => {
+    const tr   = rs.filter(r => r.userId === u.id && r.datetime.startsWith(today));
+    const inR  = tr.filter(r => r.type === 'in').pop();
+    const outR = tr.filter(r => r.type === 'out').pop();
+    const status = !inR
+      ? '<span style="color:var(--gray-500)">⚪ Não registrou entrada</span>'
+      : outR
+        ? `<span style="color:var(--red)">🔴 Saiu às ${fmtDT(outR.datetime).split(' ')[1]}</span>`
+        : `<span style="color:var(--green)">🟢 Presente desde ${fmtDT(inR.datetime).split(' ')[1]}</span>`;
+    return `<div class="summary-card">
+      <div class="sc-name">${escHtml(u.name)}</div>
+      <div class="sc-status">${status}</div>
+      <div class="sc-status" style="margin-top:3px">${tr.length} registro(s) hoje</div>
+    </div>`;
+  }).join('');
+
+  const rec = rs.slice(-12).reverse();
+  $('recentRecs').innerHTML = rec.length
+    ? rec.map(r => `<div class="rec">
+        <div class="dot ${r.type === 'in' ? 'dot-in' : 'dot-out'}" aria-hidden="true"></div>
+        <div class="rec-info">
+          <div class="rec-label">${escHtml(r.userName)} — ${r.type === 'in' ? '⬆ Entrada' : '⬇ Saída'}</div>
+          <div class="rec-time">${fmtDT(r.datetime)}</div>
+        </div>
+        ${r.manual ? '<span class="badge badge-adj">Ajustado</span>' : ''}
+      </div>`).join('')
+    : '<div class="empty">Nenhum registro ainda.</div>';
+}
+
+// ─────────────── ADMIN — AJUSTES ───────────────
+function renderAdminAdj() {
+  const as  = getA();
+  const pen = as.filter(a => a.status === 'pending').reverse();
+  const pro = as.filter(a => a.status !== 'pending').reverse();
+
+  $('pendList').innerHTML = pen.length
+    ? pen.map(adjItemHtml).join('')
+    : '<div class="empty">Nenhuma solicitação pendente. ✅</div>';
+
+  const statusMap = {
+    approved: ['badge-approved', '✅ Aprovado'],
+    rejected: ['badge-rejected', '❌ Recusado'],
+  };
+  $('procList').innerHTML = pro.length
+    ? pro.map(a => {
+        const [cls, lbl] = statusMap[a.status] || ['', ''];
+        const bc = a.status === 'approved' ? 'var(--green)' : 'var(--red)';
+        return `<div class="adj-item" style="border-left-color:${bc}">
+          <div class="adj-head">
+            <div>
+              <div class="adj-who">${escHtml(a.userName)}</div>
+              <div class="adj-det">${a.type === 'in' ? 'Entrada' : 'Saída'} — ${a.reqDate} às ${a.reqTime}</div>
+            </div>
+            <span class="badge ${cls}">${lbl}</span>
+          </div>
+          ${a.origDatetime ? `<div class="adj-det" style="color:var(--gray-500)">Registro original: ${fmtDT(a.origDatetime)}</div>` : ''}
+          <div class="adj-just">"${escHtml(a.just)}"</div>
+          ${a.note ? `<div style="font-size:.8rem;color:var(--red);margin-top:.25rem">Motivo da recusa: ${escHtml(a.note)}</div>` : ''}
+        </div>`;
+      }).join('')
+    : '<div class="empty">Nenhum ajuste processado ainda.</div>';
+}
+
+// ✅ FIX 10: type="button" nos botões gerados dinamicamente
+function adjItemHtml(a) {
+  return `<div class="adj-item">
+    <div class="adj-head">
+      <div>
+        <div class="adj-who">${escHtml(a.userName)}</div>
+        <div class="adj-det">${a.type === 'in' ? 'Entrada' : 'Saída'} — ${a.reqDate} às ${a.reqTime}</div>
+      </div>
+      <span class="badge badge-pending">⏳ Pendente</span>
+    </div>
+    ${a.origDatetime
+      ? `<div class="adj-det" style="color:var(--amber)">🔁 Substituirá o registro batido em ${fmtDT(a.origDatetime)}</div>`
+      : `<div class="adj-det" style="color:var(--amber)">➕ Registro novo (colaboradora não bateu o ponto)</div>`}
+    <div class="adj-just">"${escHtml(a.just)}"</div>
+    <div style="font-size:.78rem;color:var(--gray-500)">Solicitado em ${fmtDT(a.createdAt)}</div>
+    <div class="adj-btns">
+      <button type="button" class="btn btn-green btn-sm" onclick="processAdj('${a.id}','approved')" aria-label="Aprovar ajuste de ${escHtml(a.userName)}">✅ Aprovar</button>
+      <button type="button" class="btn btn-red btn-sm"   onclick="promptReject('${a.id}')"           aria-label="Recusar ajuste de ${escHtml(a.userName)}">❌ Recusar</button>
+    </div>
+  </div>`;
+}
+
+async function processAdj(id, status, note = '') {
+  const a = getA().find(x => x.id === id);
+  if (!a) return;
+  try {
+    await fsUpdateAdj(id, { status, note });
+    if (status === 'approved') {
+      if (a.origRecordId) {
+        // Substitui o horário do registro original em vez de criar um novo —
+        // a batida das 08:20 vira 08:00, mantendo o histórico de correção.
+        await fsUpdateRecord(a.origRecordId, {
+          datetime: a.reqISO,
+          manual: true,
+          adjRef: id,
+          correctedFrom: a.origDatetime || null,
+        });
+      } else {
+        await fsAddRecord({ id: uid(), userId: a.userId, userName: a.userName, type: a.type, datetime: a.reqISO, manual: true, adjRef: id });
+      }
+    }
+    toast(status === 'approved'
+      ? (a.origRecordId ? '✅ Ajuste aprovado — horário substituído com sucesso.' : '✅ Ajuste aprovado e lançado nos registros.')
+      : '❌ Ajuste recusado.');
+  } catch (err) {
+    console.error(err);
+    toast('⚠ Erro ao processar o ajuste. Tente novamente.');
+  }
+}
+
+let rejId = null;
+function promptReject(id) {
+  rejId = id;
+  $('cfTitle').textContent = 'Recusar Ajuste';
+  $('cfBody').innerHTML = `
+    <p style="margin-bottom:.75rem">Informe o motivo da recusa (opcional):</p>
+    <textarea id="rejNote" style="width:100%;padding:.6rem;border:1.5px solid var(--gray-200);border-radius:8px;font-family:inherit;font-size:.9rem;min-height:70px;resize:vertical" placeholder="Motivo da recusa..." aria-label="Motivo da recusa"></textarea>`;
+  const btn = $('cfBtn');
+  btn.textContent = 'Recusar';
+  btn.className   = 'btn btn-red';
+  btn.onclick     = () => {
+    const note = ($('rejNote') || {}).value?.trim() || '';
+    processAdj(rejId, 'rejected', note);
+    closeCf();
+  };
+  show('confirmModal');
+  setTimeout(() => $('rejNote')?.focus(), 50);
+}
+function closeCf() { hide('confirmModal'); }
+
+// ─────────────── ADMIN — REGISTROS ───────────────
+function renderAdminRecs() {
+  const emp   = ($('fEmp')   || {}).value || '';
+  const month = ($('fMonth') || {}).value || '';
+  let rs = getR();
+  if (emp)   rs = rs.filter(r => r.userId === emp);
+  if (month) rs = rs.filter(r => r.datetime.startsWith(month));
+  rs = rs.reverse();
+  $('allRecs').innerHTML = rs.length
+    ? rs.map(r => `<div class="rec">
+        <div class="dot ${r.type === 'in' ? 'dot-in' : 'dot-out'}" aria-hidden="true"></div>
+        <div class="rec-info">
+          <div class="rec-label">${escHtml(r.userName)} — ${r.type === 'in' ? '⬆ Entrada' : '⬇ Saída'}</div>
+          <div class="rec-time">${fmtDT(r.datetime)}</div>
+        </div>
+        ${r.manual ? '<span class="badge badge-adj">Ajustado</span>' : ''}
+      </div>`).join('')
+    : '<div class="empty">Nenhum registro encontrado com esses filtros.</div>';
+}
+
+function populateFilt() {
+  const sel  = $('fEmp');   if (!sel)  return;
+  const mEl  = $('fMonth'); if (!mEl)  return;
+  const users = getU().filter(u => u.role === 'employee');
+  sel.innerHTML = '<option value="">Todos</option>' + users.map(u => `<option value="${u.id}">${escHtml(u.name)}</option>`).join('');
+  if (!mEl.value) mEl.value = monthStr();
+}
+
+// ─────────────── ADMIN — COLABORADORES ───────────────
+function renderUsersList() {
+  const users = getU().filter(u => u.role === 'employee');
+  $('usersList').innerHTML = users.map(u => `
+    <div class="user-item">
+      <div class="avatar" aria-hidden="true">${u.name[0].toUpperCase()}</div>
+      <div style="flex:1">
+        <div class="u-name">${escHtml(u.name)}</div>
+        <div class="u-login">Login: <strong>${u.id}</strong> &nbsp;·&nbsp; Senha: <strong>${u.pass}</strong></div>
+      </div>
+      <button type="button" class="btn btn-ghost btn-sm" onclick="openScheduleModal('${u.id}')" aria-label="Editar jornada de ${escHtml(u.name)}">⏱ Jornada</button>
+      <button type="button" class="btn btn-ghost btn-sm" onclick="resetPass('${u.id}')" aria-label="Redefinir senha de ${escHtml(u.name)}">🔑 Redefinir senha</button>
+    </div>`).join('');
+}
+
+async function addUser() {
+  const name  = ($('nName').value || '').trim();
+  const id    = ($('nId').value   || '').trim().toLowerCase().replace(/[\s\W]+/g, '');
+  const pass  = ($('nPass').value || '').trim();
+  const errEl = $('nErr');
+
+  if (!name || !id || !pass) { errEl.textContent = 'Preencha todos os campos.'; show('nErr'); return; }
+  if (getU().find(u => u.id === id)) { errEl.textContent = `O login "${id}" já existe.`; show('nErr'); return; }
+
+  hide('nErr');
+  try {
+    await fsSetUser({ id, name, pass, role: 'employee', startDate: todayStr(), schedule: defaultSchedule() });
+    $('nName').value = '';
+    $('nId').value   = '';
+    $('nPass').value = '';
+    toast(`✅ ${name} cadastrado(a) com sucesso! Configure a jornada em "⏱ Jornada".`);
+  } catch (err) {
+    console.error(err);
+    errEl.textContent = 'Erro ao cadastrar. Verifique sua conexão e tente novamente.';
+    show('nErr');
+  }
+}
+
+function resetPass(userId) {
+  const user = getU().find(u => u.id === userId);
+  if (!user) return;
+  $('cfTitle').textContent = 'Redefinir Senha';
+  $('cfBody').innerHTML = `
+    <p style="margin-bottom:.75rem">Nova senha para <strong>${escHtml(user.name)}</strong>:</p>
+    <input id="npw" type="text" style="width:100%;padding:.6rem;border:1.5px solid var(--gray-200);border-radius:8px;font-family:inherit;font-size:.9rem" placeholder="Nova senha..." aria-label="Nova senha" autocomplete="off">`;
+  const btn = $('cfBtn');
+  btn.textContent = 'Salvar';
+  btn.className   = 'btn btn-navy';
+  btn.onclick     = async () => {
+    const np = ($('npw') || {}).value?.trim();
+    if (!np) { toast('⚠ Digite uma senha.'); return; }
+    try {
+      await fsSetUser({ id: userId, pass: np });
+      closeCf();
+      toast('🔑 Senha redefinida com sucesso!');
+    } catch (err) {
+      console.error(err);
+      toast('⚠ Erro ao redefinir a senha.');
+    }
+  };
+  show('confirmModal');
+  setTimeout(() => $('npw')?.focus(), 50);
+}
+
+// ─────────────── BANCO DE HORAS — ENGINE ───────────────
+const WD       = ['dom','seg','ter','qua','qui','sex','sab'];
+const WD_LABEL = { dom: 'Dom', seg: 'Seg', ter: 'Ter', qua: 'Qua', qui: 'Qui', sex: 'Sex', sab: 'Sáb' };
+const WD_FULL  = { dom: 'Domingo', seg: 'Segunda', ter: 'Terça', qua: 'Quarta', qui: 'Quinta', sex: 'Sexta', sab: 'Sábado' };
+
+function toMin(hhmm) {
+  if (!hhmm) return null;
+  const [h, m] = hhmm.split(':').map(Number);
+  if (Number.isNaN(h) || Number.isNaN(m)) return null;
+  return h * 60 + m;
+}
+function shiftMinutes(shifts) {
+  return (shifts || []).reduce((sum, s) => {
+    const ma = toMin(s.start), mb = toMin(s.end);
+    if (ma == null || mb == null || mb <= ma) return sum;
+    return sum + (mb - ma);
+  }, 0);
+}
+function expectedMinutesForDate(schedule, dateStr) {
+  if (!schedule || !schedule.days) return 0;
+  const d = new Date(dateStr + 'T00:00:00');
+  const day = schedule.days[WD[d.getDay()]];
+  if (!day || !day.enabled) return 0;
+  return shiftMinutes(day.shifts);
+}
+// Casa entradas/saídas de um dia (ordenadas) e retorna minutos trabalhados
+function workedMinutesForDay(records) {
+  const sorted = [...records].sort((a, b) => a.datetime.localeCompare(b.datetime));
+  let total = 0, openIn = null, incomplete = false;
+  for (const r of sorted) {
+    if (r.type === 'in') {
+      if (openIn) incomplete = true;
+      openIn = r.datetime;
+    } else {
+      if (openIn) { total += (new Date(r.datetime) - new Date(openIn)) / 60000; openIn = null; }
+      else incomplete = true;
+    }
+  }
+  if (openIn) incomplete = true;
+  return { minutes: Math.max(0, total), incomplete };
+}
+function fmtHM(min) {
+  const sign = min < 0 ? '-' : '';
+  const abs  = Math.round(Math.abs(min));
+  return `${sign}${Math.floor(abs / 60)}h${String(abs % 60).padStart(2, '0')}`;
+}
+function addDaysStr(dateStr, n) {
+  const d = new Date(dateStr + 'T00:00:00');
+  d.setDate(d.getDate() + n);
+  return `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())}`;
+}
+function dateRangeArray(startStr, endStr) {
+  const out = [];
+  let cur = startStr;
+  let guard = 0;
+  while (cur <= endStr && guard < 3660) { out.push(cur); cur = addDaysStr(cur, 1); guard++; }
+  return out;
+}
+function firstDayOfMonthStr(monthStr_) { return `${monthStr_}-01`; }
+function lastDayOfMonthStr(monthStr_) {
+  const [y, m] = monthStr_.split('-').map(Number);
+  const d = new Date(y, m, 0);
+  return `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())}`;
+}
+function mondayOfWeek(dateStr) {
+  const d = new Date(dateStr + 'T00:00:00');
+  const diff = (d.getDay() + 6) % 7; // 0 = segunda
+  d.setDate(d.getDate() - diff);
+  return `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())}`;
+}
+
+// Info de um único dia para um usuário: previsto x trabalhado x saldo (+ ajustes manuais)
+function manualMinutesForDate(userId, dateStr) {
+  return getBH().filter(a => a.userId === userId && a.date === dateStr).reduce((s, a) => s + a.minutes, 0);
+}
+function dayInfo(user, dateStr) {
+  const expected = expectedMinutesForDate(user.schedule, dateStr);
+  const recs = getR().filter(r => r.userId === user.id && r.datetime.startsWith(dateStr));
+  const { minutes: worked, incomplete } = workedMinutesForDay(recs);
+  const manual = manualMinutesForDate(user.id, dateStr);
+  return {
+    expected, worked, incomplete, manual,
+    diff: worked - expected + manual,
+    punches: recs.slice().sort((a, b) => a.datetime.localeCompare(b.datetime)),
+  };
+}
+
+// ─────────────── BANCO DE HORAS — ADMIN ───────────────
+function populateBhFilter() {
+  const sel = $('bhEmp'); if (!sel) return;
+  const users = getU().filter(u => u.role === 'employee');
+  const prev = sel.value;
+  sel.innerHTML = users.map(u => `<option value="${u.id}">${escHtml(u.name)}</option>`).join('');
+  if (users.find(u => u.id === prev)) sel.value = prev;
+  const mEl = $('bhMonth'); if (mEl && !mEl.value) mEl.value = monthStr();
+}
+
+function renderBanco() {
+  const sel = $('bhEmp'); if (!sel) return;
+  const userId = sel.value;
+  const user = getU().find(u => u.id === userId);
+  const body = $('bhTableBody');
+  if (!user) {
+    $('bhSummary').innerHTML = '<div class="empty">Selecione uma colaboradora.</div>';
+    if (body) body.innerHTML = '';
+    return;
+  }
+  const sm = ($('bhMonth') || {}).value || monthStr();
+  const start = user.startDate || todayStr();
+  const monthStart = firstDayOfMonthStr(sm);
+  const monthEndCap = lastDayOfMonthStr(sm) < todayStr() ? lastDayOfMonthStr(sm) : todayStr();
+
+  if (monthEndCap < monthStart) {
+    $('bhSummary').innerHTML = '<div class="empty">Mês futuro — nenhum dado ainda.</div>';
+    body.innerHTML = '';
+    return;
+  }
+
+  const effectiveStart = start < monthStart ? start : monthStart; // garante acúmulo desde o início do contrato
+  const allDates = dateRangeArray(effectiveStart, monthEndCap);
+  let running = 0;
+  const rows = [];
+  allDates.forEach(d => {
+    const info = dayInfo(user, d);
+    running += info.diff;
+    if (d >= monthStart) rows.push({ date: d, ...info, running });
+  });
+
+  const target = (user.schedule || {}).weeklyTarget || 44;
+  const sumExpected = rows.reduce((s, r) => s + r.expected, 0);
+  const sumWorked   = rows.reduce((s, r) => s + r.worked, 0);
+  const sumDiff     = rows.reduce((s, r) => s + r.diff, 0);
+  const totalBalance = rows.length ? rows[rows.length - 1].running : running;
+
+  const card = (label, val, cls) => `<div class="bh-card"><div class="bh-label">${label}</div><div class="bh-value ${cls}">${val}</div></div>`;
+  $('bhSummary').innerHTML =
+    card('Meta semanal', `${target}h`, 'bh-neu') +
+    card('Previstas no mês', fmtHM(sumExpected), 'bh-neu') +
+    card('Trabalhadas no mês', fmtHM(sumWorked), 'bh-neu') +
+    card('Saldo do mês', fmtHM(sumDiff), sumDiff >= 0 ? 'bh-pos' : 'bh-neg') +
+    card('Saldo acumulado total', fmtHM(totalBalance), totalBalance >= 0 ? 'bh-pos' : 'bh-neg');
+
+  const todayS = todayStr();
+  body.innerHTML = rows.length ? rows.slice().reverse().map(r => {
+    const d = new Date(r.date + 'T00:00:00');
+    const wd = WD[d.getDay()];
+    const isOff = r.expected === 0 && r.worked === 0 && r.manual === 0;
+    const punchesHtml = r.punches.length
+      ? r.punches.map(p => `${p.type === 'in' ? '⬆' : '⬇'} ${fmtDT(p.datetime).split(' ')[1]}`).join(' · ')
+      : '—';
+    return `<tr class="${isOff ? 'bh-off' : ''} ${r.date === todayS ? 'bh-today' : ''}">
+      <td>${r.date.split('-').reverse().join('/')}</td>
+      <td>${WD_LABEL[wd]}</td>
+      <td>${r.expected ? fmtHM(r.expected) : '—'}</td>
+      <td class="bh-punches">${punchesHtml}${r.incomplete ? ' <span class="bh-incomplete">⚠ incompleto</span>' : ''}</td>
+      <td>${r.worked ? fmtHM(r.worked) : '—'}</td>
+      <td class="${r.manual > 0 ? 'bh-pos' : r.manual < 0 ? 'bh-neg' : ''}">${r.manual ? fmtHM(r.manual) : '—'}</td>
+      <td class="${r.diff > 0 ? 'bh-pos' : r.diff < 0 ? 'bh-neg' : ''}">${r.expected || r.worked || r.manual ? fmtHM(r.diff) : '—'}</td>
+      <td class="${r.running >= 0 ? 'bh-pos' : 'bh-neg'}">${fmtHM(r.running)}</td>
+    </tr>`;
+  }).join('') : '<tr><td colspan="8" class="empty">Nenhum dado neste período.</td></tr>';
+
+  renderBhAdjList(userId);
+}
+
+// ─────────────── AJUSTE MANUAL DE HORAS ───────────────
+function renderBhAdjList(userId) {
+  const el = $('bhAdjList'); if (!el) return;
+  const list = getBH().filter(a => a.userId === userId).sort((a, b) => b.date.localeCompare(a.date) || b.createdAt.localeCompare(a.createdAt));
+  el.innerHTML = list.length ? list.map(a => `
+    <div class="rec">
+      <div class="dot ${a.minutes >= 0 ? 'dot-in' : 'dot-out'}" aria-hidden="true"></div>
+      <div class="rec-info">
+        <div class="rec-label">${a.date.split('-').reverse().join('/')} — <span class="${a.minutes >= 0 ? 'bh-pos' : 'bh-neg'}">${fmtHM(a.minutes)}</span></div>
+        <div class="rec-time">${escHtml(a.reason)}</div>
+      </div>
+      <button type="button" class="btn btn-ghost btn-sm" onclick="deleteBhAdj('${a.id}')" aria-label="Remover ajuste">🗑</button>
+    </div>`).join('') : '<div class="empty">Nenhum ajuste manual lançado.</div>';
+}
+
+function openBhAdjModal() {
+  const sel = $('bhEmp');
+  const user = getU().find(u => u.id === (sel || {}).value);
+  if (!user) { toast('Selecione uma colaboradora primeiro.'); return; }
+  $('bhAdjWho').textContent = user.name;
+  $('bhAdjDate').value = todayStr();
+  $('bhAdjType').value = 'add';
+  $('bhAdjHours').value = '';
+  $('bhAdjReason').value = '';
+  hide('bhAdjErr');
+  show('bhAdjModal');
+  setTimeout(() => $('bhAdjHours')?.focus(), 50);
+}
+function closeBhAdjModal() { hide('bhAdjModal'); }
+
+async function submitBhAdj() {
+  const sel = $('bhEmp');
+  const user = getU().find(u => u.id === (sel || {}).value);
+  const errEl = $('bhAdjErr');
+  if (!user) return;
+
+  const date   = $('bhAdjDate').value;
+  const type   = $('bhAdjType').value; // 'add' | 'remove'
+  const hours  = parseFloat($('bhAdjHours').value);
+  const reason = ($('bhAdjReason').value || '').trim();
+
+  if (!date || !hours || hours <= 0 || !reason) {
+    errEl.textContent = 'Preencha data, quantidade de horas (maior que zero) e o motivo.';
+    show('bhAdjErr');
+    return;
+  }
+
+  const minutes = Math.round(hours * 60) * (type === 'remove' ? -1 : 1);
+  const adj = {
+    id: uid(), userId: user.id, userName: user.name,
+    date, minutes, reason,
+    createdAt: new Date().toISOString(), createdBy: CU.name,
+  };
+  try {
+    await fsAddBhAdj(adj);
+    closeBhAdjModal();
+    toast(type === 'remove' ? '✅ Horas removidas do banco.' : '✅ Horas adicionadas ao banco.');
+  } catch (err) {
+    console.error(err);
+    errEl.textContent = 'Erro ao salvar. Verifique sua conexão e tente novamente.';
+    show('bhAdjErr');
+  }
+}
+
+async function deleteBhAdj(id) {
+  if (!confirm('Remover este ajuste manual? Essa ação não pode ser desfeita.')) return;
+  try {
+    await fsDeleteBhAdj(id);
+    toast('🗑 Ajuste removido.');
+  } catch (err) {
+    console.error(err);
+    toast('⚠ Erro ao remover o ajuste.');
+  }
+}
+
+// ─────────────── BANCO DE HORAS — COLABORADOR (resumo da semana atual) ───────────────
+function renderEmpBh() {
+  const el = $('empBhSummary'); if (!el || !CU) return;
+  const today = todayStr();
+  const monday = mondayOfWeek(today);
+  const dates = dateRangeArray(monday, today);
+  let expected = 0, worked = 0, diff = 0;
+  dates.forEach(d => { const info = dayInfo(CU, d); expected += info.expected; worked += info.worked; diff += info.diff; });
+
+  // Saldo acumulado total (desde o início do contrato)
+  const start = CU.startDate || today;
+  let totalBalance = 0;
+  dateRangeArray(start, today).forEach(d => { totalBalance += dayInfo(CU, d).diff; });
+
+  const card = (label, val, cls) => `<div class="bh-card"><div class="bh-label">${label}</div><div class="bh-value ${cls}">${val}</div></div>`;
+  el.innerHTML =
+    card('Previsto (semana)', fmtHM(expected), 'bh-neu') +
+    card('Trabalhado (semana)', fmtHM(worked), 'bh-neu') +
+    card('Saldo (semana)', fmtHM(diff), diff >= 0 ? 'bh-pos' : 'bh-neg') +
+    card('Saldo acumulado total', fmtHM(totalBalance), totalBalance >= 0 ? 'bh-pos' : 'bh-neg');
+}
+
+// ─────────────── MODAL DE JORNADA ───────────────
+let SCH_USER_ID = null;
+function updateSchSum() {
+  let total = 0;
+  WD.forEach(k => {
+    if (!($(`schEn_${k}`) || {}).checked) return;
+    const shifts = [
+      sh(($(`schS1_${k}`)||{}).value, ($(`schE1_${k}`)||{}).value),
+      sh(($(`schS2_${k}`)||{}).value, ($(`schE2_${k}`)||{}).value),
+    ];
+    total += shiftMinutes(shifts);
+  });
+  const el = $('schSum'); if (el) el.textContent = fmtHM(total);
+  return total;
+}
+
+function openScheduleModal(userId) {
+  const user = getU().find(u => u.id === userId);
+  if (!user) { toast('Selecione uma colaboradora primeiro.'); return; }
+  SCH_USER_ID = userId;
+  const sch = user.schedule || defaultSchedule();
+  $('schModalTitle').textContent = `⏱ Jornada de trabalho — ${user.name}`;
+
+  $('schDays').innerHTML = WD.map(k => {
+    const day = sch.days[k] || { enabled: false, shifts: [] };
+    const s1 = day.shifts[0] || { start: '', end: '' };
+    const s2 = day.shifts[1] || { start: '', end: '' };
+    return `<div class="shift-row">
+      <label class="dayname"><input type="checkbox" id="schEn_${k}" onchange="updateSchSum()" ${day.enabled ? 'checked' : ''}> ${WD_FULL[k]}</label>
+      <input type="time" id="schS1_${k}" value="${s1.start || ''}" onchange="updateSchSum()">
+      <span class="to">até</span>
+      <input type="time" id="schE1_${k}" value="${s1.end || ''}" onchange="updateSchSum()">
+      <span class="to">e</span>
+      <input type="time" id="schS2_${k}" value="${s2.start || ''}" onchange="updateSchSum()">
+      <span class="to">até</span>
+      <input type="time" id="schE2_${k}" value="${s2.end || ''}" onchange="updateSchSum()">
+    </div>`;
+  }).join('');
+
+  $('schTarget').value = sch.weeklyTarget || 44;
+  hide('schErr');
+  show('scheduleModal');
+  updateSchSum();
+}
+function closeScheduleModal() { hide('scheduleModal'); SCH_USER_ID = null; }
+
+async function saveSchedule() {
+  if (!SCH_USER_ID) return;
+  const errEl = $('schErr');
+  const days = {};
+  WD.forEach(k => {
+    const enabled = ($(`schEn_${k}`) || {}).checked || false;
+    const shifts = [
+      sh(($(`schS1_${k}`)||{}).value, ($(`schE1_${k}`)||{}).value),
+      sh(($(`schS2_${k}`)||{}).value, ($(`schE2_${k}`)||{}).value),
+    ].filter(s => s.start && s.end);
+    days[k] = { enabled, shifts };
+  });
+  const weeklyTarget = parseFloat($('schTarget').value) || 0;
+  if (weeklyTarget <= 0) {
+    errEl.textContent = 'Informe uma meta semanal válida.';
+    show('schErr');
+    return;
+  }
+  try {
+    await fsSetUser({ id: SCH_USER_ID, schedule: { weeklyTarget, days } });
+    closeScheduleModal();
+    toast('✅ Jornada salva com sucesso!');
+  } catch (err) {
+    console.error(err);
+    errEl.textContent = 'Erro ao salvar. Verifique sua conexão e tente novamente.';
+    show('schErr');
+  }
+}
+
+// ─────────────── FECHAR MODAL COM ESC ───────────────
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') {
+    if (!$('adjModal').classList.contains('hidden'))      closeAdjModal();
+    if (!$('confirmModal').classList.contains('hidden'))  closeCf();
+    if (!$('scheduleModal').classList.contains('hidden')) closeScheduleModal();
+    if (!$('bhAdjModal').classList.contains('hidden'))    closeBhAdjModal();
+  }
+});
+
+// ─────────────── INICIALIZAÇÃO ───────────────
+boot();
+</script>
 </body>
 </html>
