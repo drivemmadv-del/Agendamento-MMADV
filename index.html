@@ -1,770 +1,1203 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="pt-BR">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Agendamento MMADV</title>
-<script src="https://cdn.tailwindcss.com"></script>
-<script src="https://unpkg.com/react@18/umd/react.development.js"></script>
-<script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
-<script src="https://unpkg.com/@babel/standalone@7.25.6/babel.min.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<style>
-  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif; }
-  ::-webkit-scrollbar { width: 8px; height: 8px; }
-  ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
-</style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MMADV — Agendamentos Comerciais</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='16' fill='%231F3864'/><text y='.9em' font-size='60' x='50%' text-anchor='middle' fill='%23C5A24A' font-weight='bold'>M</text></svg>" />
+
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- React -->
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+
+  <!-- Babel (transforma o JSX no navegador) -->
+  <script src="https://unpkg.com/@babel/standalone@7.25.6/babel.min.js"></script>
+
+  <!-- Firebase -->
+  <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore-compat.js"></script>
+
+  <!-- SheetJS (exportação Excel) -->
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+
+  <style>
+    body { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; }
+  </style>
 </head>
-<body class="bg-slate-100">
-<div id="root"></div>
+<body>
+  <div id="root"></div>
 
-<script>
-/* =========================================================================
-   CONFIGURAÇÃO DO FIREBASE — COLE SUAS CREDENCIAIS AQUI
-   Firebase Console > Configurações do projeto > Seus apps > SDK setup
-   Projeto Firebase: agendamentommadv-32dae (compartilhado com o Ponto MMADV)
-   ========================================================================= */
-const firebaseConfig = {
-  apiKey: "AIzaSyDHBmGuYWptEN-UFawXtA3ROiT2NuOjC3E",
-  authDomain: "agendamentommadv-32dae.firebaseapp.com",
-  projectId: "agendamentommadv-32dae",
-  storageBucket: "agendamentommadv-32dae.firebasestorage.app",
-  messagingSenderId: "32241097932",
-  appId: "1:32241097932:web:3459dc7d8eba9d93a77669"
-};
-firebase.initializeApp(firebaseConfig);
-const auth = firebase.auth();
-const db = firebase.firestore();
-</script>
+  <script type="text/babel" data-presets="react">
+    /* ═══════════════════════════════════════════════════════════════════
+       ┃  COLE AQUI AS 6 CREDENCIAIS DO SEU FIREBASE                      ┃
+       ┃  (Configurações do projeto → Seus apps → ícone </>)             ┃
+       ═══════════════════════════════════════════════════════════════════ */
+    const firebaseConfig = {
+      apiKey:            "AIzaSyDHBmGuYWptEN-UFawXtA3ROiT2NuOjC3E",
+      authDomain:        "agendamentommadv-32dae.firebaseapp.com",
+      projectId:         "agendamentommadv-32dae",
+      storageBucket:     "agendamentommadv-32dae.firebasestorage.app",
+      messagingSenderId: "32241097932",
+      appId:             "1:32241097932:web:3459dc7d8eba9d93a77669",
+    };
+    /* ═══════════════════════════════════════════════════════════════════ */
 
-<script type="text/babel" data-presets="react">
-const { useState, useEffect, useMemo } = React;
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
 
-/* ================= CONSTANTES DA EQUIPE ================= */
-const AGENDADOR_FUNCAO = {
-  "Izabel": "SDR",
-  "Kelly": "SDR",
-  "Daniel": "Social Seller",
-  "Camila": "Social Seller",
-};
-const AGENDADORES = Object.keys(AGENDADOR_FUNCAO);
-const CLOSERS = ["Laís", "Júlia", "Léo", "Malu", "Franklin", "Daniel"];
-const TIPOS = ["Reunião", "Consulta"];
-const STATUS_LIST = ["Agendado", "Realizado", "No-show", "Cancelado"];
-const STATUS_COLORS = {
-  "Agendado": "bg-blue-100 text-blue-800",
-  "Realizado": "bg-green-100 text-green-800",
-  "No-show": "bg-red-100 text-red-800",
-  "Cancelado": "bg-slate-200 text-slate-600",
-};
-const DDI_LIST = [
-  { code: "55", label: "🇧🇷 +55 Brasil" },
-  { code: "1", label: "🇺🇸 +1 EUA/Canadá" },
-  { code: "351", label: "🇵🇹 +351 Portugal" },
-  { code: "44", label: "🇬🇧 +44 Reino Unido" },
-  { code: "34", label: "🇪🇸 +34 Espanha" },
-  { code: "39", label: "🇮🇹 +39 Itália" },
-  { code: "49", label: "🇩🇪 +49 Alemanha" },
-  { code: "33", label: "🇫🇷 +33 França" },
-  { code: "54", label: "🇦🇷 +54 Argentina" },
-  { code: "598", label: "🇺🇾 +598 Uruguai" },
-];
+    const { useState, useEffect } = React;
 
-const NAVY = "#1F3864";
-const GOLD = "#C5A24A";
+    // ─── Cores e configuração da equipe ───────────────────────────────
+    const NAVY = "#1F3864";
+    const GOLD = "#C5A24A";
 
-/* ================= HELPERS DE DATA ================= */
-function todayISO() {
-  const d = new Date();
-  return d.toISOString().slice(0, 10);
-}
-function parseISO(iso) {
-  if (!iso) return null;
-  const [y, m, d] = iso.split("-").map(Number);
-  return new Date(y, m - 1, d);
-}
-function fmtBR(iso) {
-  if (!iso) return "—";
-  const [y, m, d] = iso.split("-");
-  return `${d}/${m}/${y}`;
-}
-function isoWeekKey(iso) {
-  const d = parseISO(iso);
-  if (!d) return null;
-  const target = new Date(d.valueOf());
-  const dayNr = (d.getDay() + 6) % 7;
-  target.setDate(target.getDate() - dayNr + 3);
-  const firstThursday = new Date(target.getFullYear(), 0, 4);
-  const diff = target - firstThursday;
-  const week = 1 + Math.round(diff / (7 * 24 * 60 * 60 * 1000));
-  return `${target.getFullYear()}-S${String(week).padStart(2, "0")}`;
-}
-function mesKey(iso) {
-  if (!iso) return null;
-  return iso.slice(0, 7);
-}
-function mondayOf(iso) {
-  const d = parseISO(iso);
-  const dayNr = (d.getDay() + 6) % 7;
-  d.setDate(d.getDate() - dayNr);
-  return d;
-}
-function weekLabel(wk) {
-  return wk ? wk.replace("-", " · Semana ") : "—";
-}
-function mesLabelBR(mk) {
-  if (!mk) return "—";
-  const [y, m] = mk.split("-");
-  const nomes = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
-  return `${nomes[parseInt(m, 10) - 1]}/${y}`;
-}
+    const TEAM = {
+      SDR: ["Izabel", "Kelly"],
+      "Social Seller": ["Daniel", "Camila"],
+    };
+    const CLOSERS = ["Laís", "Júlia", "Léo", "Malu", "Franklin", "Daniel"];
 
-/* ================= APP RAIZ ================= */
-function App() {
-  const [authReady, setAuthReady] = useState(false);
-  const [authError, setAuthError] = useState(null);
-  const [meetings, setMeetings] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [dataError, setDataError] = useState(null);
-  const [view, setView] = useState("dashboard");
+    const ALL_SCHEDULERS = Object.entries(TEAM).flatMap(([role, members]) =>
+      members.map((name) => ({ name, role }))
+    );
 
-  useEffect(() => {
-    let unsubSnapshot = () => {};
-    const unsubAuth = auth.onAuthStateChanged((user) => {
-      if (user) {
-        setAuthReady(true);
-        unsubSnapshot = db.collection("meetings").onSnapshot(
-          (snap) => {
-            const arr = [];
-            snap.forEach((doc) => arr.push({ id: doc.id, ...doc.data() }));
-            arr.sort((a, b) => (a.dataReuniao || "").localeCompare(b.dataReuniao || "") || (a.horario || "").localeCompare(b.horario || ""));
-            setMeetings(arr);
+    const STATUS_CONFIG = {
+      agendado:  { label: "Agendado",  color: "#1D4ED8", bg: "#DBEAFE", border: "#93C5FD" },
+      realizado: { label: "Realizado", color: "#15803D", bg: "#DCFCE7", border: "#86EFAC" },
+      cancelado: { label: "Cancelado", color: "#B91C1C", bg: "#FEE2E2", border: "#FCA5A5" },
+      noshow:    { label: "No-show",   color: "#B45309", bg: "#FEF3C7", border: "#FCD34D" },
+    };
+
+    const MONTHS = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
+
+    // Tipo de atendimento
+    const TYPE_CONFIG = {
+      reuniao:  { label: "Reunião",  icon: "🤝", color: "#1F3864", bg: "#E8EDF6" },
+      consulta: { label: "Consulta", icon: "💬", color: "#8B6914", bg: "#FBF3E3" },
+    };
+
+    // Códigos de país (DDI) para telefone internacional
+    const COUNTRY_CODES = [
+      { code: "+55",  label: "🇧🇷 +55 Brasil" },
+      { code: "+351", label: "🇵🇹 +351 Portugal" },
+      { code: "+1",   label: "🇺🇸 +1 EUA / Canadá" },
+      { code: "+54",  label: "🇦🇷 +54 Argentina" },
+      { code: "+598", label: "🇺🇾 +598 Uruguai" },
+      { code: "+595", label: "🇵🇾 +595 Paraguai" },
+      { code: "+591", label: "🇧🇴 +591 Bolívia" },
+      { code: "+56",  label: "🇨🇱 +56 Chile" },
+      { code: "+57",  label: "🇨🇴 +57 Colômbia" },
+      { code: "+34",  label: "🇪🇸 +34 Espanha" },
+      { code: "+39",  label: "🇮🇹 +39 Itália" },
+      { code: "+33",  label: "🇫🇷 +33 França" },
+      { code: "+49",  label: "🇩🇪 +49 Alemanha" },
+      { code: "+44",  label: "🇬🇧 +44 Reino Unido" },
+      { code: "+41",  label: "🇨🇭 +41 Suíça" },
+      { code: "+81",  label: "🇯🇵 +81 Japão" },
+      { code: "+61",  label: "🇦🇺 +61 Austrália" },
+      { code: "+971", label: "🇦🇪 +971 Emirados Árabes" },
+    ];
+
+    function getEmptyForm() {
+      return {
+        schedulerName: "", schedulerRole: "",
+        closer: "", clientName: "",
+        clientPhoneCountry: "+55", clientPhone: "",
+        bookingDate: new Date().toISOString().slice(0, 10),
+        date: "", time: "", notes: "", type: "reuniao",
+      };
+    }
+
+    function fmtDate(d) {
+      if (!d) return "—";
+      const [y, m, day] = d.split("-");
+      return `${day}/${m}/${y}`;
+    }
+
+    // Segunda-feira da semana de uma data "YYYY-MM-DD"
+    function weekStart(dateStr) {
+      const d = new Date(dateStr + "T00:00:00");
+      const day = d.getDay();              // 0=Dom ... 6=Sáb
+      const diff = (day === 0 ? -6 : 1 - day);
+      d.setDate(d.getDate() + diff);
+      return d;
+    }
+    function weekLabel(monday) {
+      const end = new Date(monday);
+      end.setDate(end.getDate() + 6);
+      const f = (dt) => `${String(dt.getDate()).padStart(2,"0")}/${MONTHS[dt.getMonth()].toLowerCase()}`;
+      return `${f(monday)} – ${f(end)}`;
+    }
+    const MONTHS_FULL = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
+    function monthLabel(key) {
+      const [y, m] = key.split("-");
+      return `${MONTHS_FULL[parseInt(m) - 1]}/${y}`;
+    }
+    // Data do agendamento, com fallback para registros antigos
+    function bookingOf(m) {
+      return m.bookingDate || (m.createdAt ? m.createdAt.slice(0, 10) : m.date) || "";
+    }
+
+    // ─── Ícones (SVG inline) ──────────────────────────────────────────
+    function Svg({ children, size = 14 }) {
+      return (
+        <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
+          stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          {children}
+        </svg>
+      );
+    }
+    const IconPlus     = (p) => <Svg {...p}><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></Svg>;
+    const IconCalendar = (p) => <Svg {...p}><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></Svg>;
+    const IconChart    = (p) => <Svg {...p}><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></Svg>;
+    const IconTrash    = (p) => <Svg {...p}><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></Svg>;
+    const IconUser     = (p) => <Svg {...p}><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></Svg>;
+    const IconClock    = (p) => <Svg {...p}><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></Svg>;
+    const IconPhone    = (p) => <Svg {...p}><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></Svg>;
+    const IconNote     = (p) => <Svg {...p}><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></Svg>;
+    const IconCheck    = (p) => <Svg {...p}><polyline points="20 6 9 17 4 12"/></Svg>;
+    const IconAlert    = (p) => <Svg {...p}><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></Svg>;
+    const IconChevron  = (p) => <Svg {...p}><polyline points="9 18 15 12 9 6"/></Svg>;
+    const IconWifiOff  = (p) => <Svg {...p}><line x1="1" y1="1" x2="23" y2="23"/><path d="M16.72 11.06A10.94 10.94 0 0 1 19 12.55"/><path d="M5 12.55a10.94 10.94 0 0 1 5.17-2.39"/><path d="M10.71 5.05A16 16 0 0 1 22.58 9"/><path d="M1.42 9a15.91 15.91 0 0 1 4.7-2.88"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><line x1="12" y1="20" x2="12.01" y2="20"/></Svg>;
+    const IconRefresh  = (p) => <Svg {...p}><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></Svg>;
+    const IconDownload = (p) => <Svg {...p}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></Svg>;
+    const IconEdit     = (p) => <Svg {...p}><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></Svg>;
+
+    // ─── Componentes pequenos ─────────────────────────────────────────
+    function StatusBadge({ status }) {
+      const s = STATUS_CONFIG[status] || STATUS_CONFIG.agendado;
+      return (
+        <span style={{
+          background: s.bg, color: s.color, border: `1px solid ${s.border}`,
+          borderRadius: 99, padding: "2px 10px", fontSize: 11, fontWeight: 700,
+          whiteSpace: "nowrap", display: "inline-block",
+        }}>
+          {s.label}
+        </span>
+      );
+    }
+    function CountBadge({ n, color, bg }) {
+      return (
+        <span style={{
+          background: bg, color, borderRadius: 99,
+          padding: "2px 10px", fontSize: 12, fontWeight: 700, display: "inline-block",
+        }}>{n}</span>
+      );
+    }
+
+    // ─── App principal ────────────────────────────────────────────────
+    function App() {
+      const [tab, setTab]           = useState("dashboard");
+      const [meetings, setMeetings] = useState([]);
+      const [loading, setLoading]   = useState(true);
+      const [connected, setConnected] = useState(true);
+      const [dbError, setDbError]   = useState(null);
+      const [formOk, setFormOk]     = useState(false);
+      const [formErr, setFormErr]   = useState("");
+      const [saving, setSaving]     = useState(false);
+      const [form, setForm]         = useState(getEmptyForm());
+
+      const [fCloser, setFCloser] = useState("todos");
+      const [fStatus, setFStatus] = useState("todos");
+      const [fSched,  setFSched]  = useState("todos");
+      const [fType,   setFType]   = useState("todos");
+      const [sortBy,  setSortBy]  = useState("date_asc");
+
+      // Período dos rankings
+      const hoje = new Date().toISOString().slice(0, 10);
+      const [rankPeriod, setRankPeriod]   = useState("semana"); // semana | mes | total
+      const [rankDateRef, setRankDateRef] = useState("reuniao"); // reuniao | agendamento
+      const [rankWeek,  setRankWeek]  = useState(weekStart(hoje).toISOString().slice(0, 10));
+      const [rankMonth, setRankMonth] = useState(hoje.slice(0, 7));
+
+      // Reagendamento (qual card está aberto + nova data/hora)
+      const [reschedId,   setReschedId]   = useState(null);
+      const [reschedDate, setReschedDate] = useState("");
+      const [reschedTime, setReschedTime] = useState("");
+
+      // Edição completa (qual card está em edição + dados temporários)
+      const [editId, setEditId]     = useState(null);
+      const [editForm, setEditForm] = useState(null);
+
+      // Listener em tempo real
+      useEffect(() => {
+        const unsub = db.collection("meetings").orderBy("createdAt", "desc").onSnapshot(
+          (snapshot) => {
+            const data = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+            setMeetings(data);
             setLoading(false);
+            setConnected(true);
+            setDbError(null);
           },
           (err) => {
-            console.error(err);
-            setDataError("Erro ao carregar agendamentos. Verifique as credenciais do Firebase no topo do arquivo e as regras do Firestore.");
+            console.error("Firebase error:", err);
+            setConnected(false);
+            setDbError("Não foi possível conectar ao banco. Verifique as credenciais do Firebase no topo do arquivo.");
             setLoading(false);
           }
         );
-      } else {
-        auth.signInAnonymously().catch((err) => {
+        return () => unsub();
+      }, []);
+
+      function setF(key, val) { setForm((f) => ({ ...f, [key]: val })); }
+
+      async function handleSubmit() {
+        setFormErr("");
+        if (!form.schedulerName || !form.closer || !form.clientName || !form.bookingDate || !form.date || !form.time) {
+          setFormErr("Preencha todos os campos marcados com *.");
+          return;
+        }
+        // Trava: 1 agendamento por horário por Closer (ignora cancelados)
+        const conflito = meetings.find(
+          (m) =>
+            m.closer === form.closer &&
+            m.date === form.date &&
+            m.time === form.time &&
+            m.status !== "cancelado"
+        );
+        if (conflito) {
+          setFormErr(`${form.closer} já tem uma reunião em ${fmtDate(form.date)} às ${form.time}. Escolha outro horário ou outro closer.`);
+          return;
+        }
+        setSaving(true);
+        try {
+          const telefone = form.clientPhone
+            ? `${form.clientPhoneCountry} ${form.clientPhone}`.trim()
+            : "";
+          await db.collection("meetings").add({
+            schedulerName: form.schedulerName,
+            schedulerRole: form.schedulerRole,
+            closer:        form.closer,
+            clientName:    form.clientName,
+            clientPhone:   telefone,
+            bookingDate:   form.bookingDate || new Date().toISOString().slice(0, 10),
+            date:          form.date,
+            time:          form.time,
+            notes:         form.notes,
+            type:          form.type || "reuniao",
+            status:        "agendado",
+            createdAt:     new Date().toISOString(),
+          });
+          setForm(getEmptyForm());
+          setFormOk(true);
+          setTimeout(() => { setFormOk(false); setTab("agenda"); }, 1400);
+        } catch (err) {
           console.error(err);
-          setAuthError("Não foi possível autenticar. Verifique se o login Anônimo está habilitado em Firebase > Authentication > Sign-in method.");
-          setLoading(false);
+          setFormErr("Erro ao salvar. Verifique a conexão e tente novamente.");
+        } finally {
+          setSaving(false);
+        }
+      }
+
+      async function updateStatus(id, status) {
+        try { await db.collection("meetings").doc(id).update({ status }); }
+        catch (err) { console.error(err); alert("Erro ao atualizar."); }
+      }
+
+      async function removeMeeting(id) {
+        if (!confirm("Remover este agendamento?")) return;
+        try { await db.collection("meetings").doc(id).delete(); }
+        catch (err) { console.error(err); alert("Erro ao remover."); }
+      }
+
+      // Abre o painel de reagendamento com a data/hora atuais preenchidas
+      function abrirReagendar(m) {
+        setReschedId(m.id);
+        setReschedDate(m.date || "");
+        setReschedTime(m.time || "");
+      }
+
+      async function confirmarReagendar(m) {
+        if (!reschedDate || !reschedTime) { alert("Informe a nova data e o novo horário."); return; }
+        // Trava: 1 reunião por horário por Closer (ignora este próprio e cancelados)
+        const conflito = meetings.find(
+          (x) =>
+            x.id !== m.id &&
+            x.closer === m.closer &&
+            x.date === reschedDate &&
+            x.time === reschedTime &&
+            x.status !== "cancelado"
+        );
+        if (conflito) {
+          alert(`${m.closer} já tem uma reunião em ${fmtDate(reschedDate)} às ${reschedTime}. Escolha outro horário.`);
+          return;
+        }
+        try {
+          await db.collection("meetings").doc(m.id).update({
+            date: reschedDate,
+            time: reschedTime,
+            status: "agendado",
+            rescheduledAt: new Date().toISOString(),
+            rescheduleCount: (m.rescheduleCount || 0) + 1,
+          });
+          setReschedId(null);
+        } catch (err) { console.error(err); alert("Erro ao reagendar."); }
+      }
+
+      // Exporta os resultados filtrados para Excel (.xlsx)
+      function exportarExcel() {
+        if (!window.XLSX) { alert("A biblioteca de Excel ainda está carregando. Tente novamente em alguns segundos."); return; }
+        const statusLabel = { agendado: "Agendado", realizado: "Realizado", cancelado: "Cancelado", noshow: "No-show" };
+        const linhas = filtered.map((m) => ({
+          "Data do agendamento": fmtDate(bookingOf(m)),
+          "Data da reunião": fmtDate(m.date),
+          "Horário": m.time || "",
+          "Tipo": TYPE_CONFIG[m.type || "reuniao"].label,
+          "Cliente": m.clientName || "",
+          "Telefone": m.clientPhone || "",
+          "Agendador": m.schedulerName || "",
+          "Função": m.schedulerRole || "",
+          "Closer": m.closer || "",
+          "Status": statusLabel[m.status] || m.status,
+          "Reagendamentos": m.rescheduleCount || 0,
+          "Observações": m.notes || "",
+        }));
+        if (linhas.length === 0) { alert("Não há agendamentos para exportar com os filtros atuais."); return; }
+        const ws = XLSX.utils.json_to_sheet(linhas);
+        ws["!cols"] = [
+          { wch: 18 }, { wch: 15 }, { wch: 9 }, { wch: 10 }, { wch: 24 }, { wch: 18 },
+          { wch: 14 }, { wch: 14 }, { wch: 12 }, { wch: 12 }, { wch: 14 }, { wch: 40 },
+        ];
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Agendamentos");
+        XLSX.writeFile(wb, `MMADV_Agendamentos_${new Date().toISOString().slice(0, 10)}.xlsx`);
+      }
+
+      // Abre a edição completa de um agendamento
+      function abrirEditar(m) {
+        setReschedId(null);
+        setEditId(m.id);
+        setEditForm({
+          schedulerName: m.schedulerName || "",
+          schedulerRole: m.schedulerRole || "",
+          closer: m.closer || "",
+          clientName: m.clientName || "",
+          clientPhoneCountry: (m.clientPhone && m.clientPhone.startsWith("+")) ? m.clientPhone.split(" ")[0] : "+55",
+          clientPhone: (m.clientPhone && m.clientPhone.startsWith("+")) ? m.clientPhone.split(" ").slice(1).join(" ") : (m.clientPhone || ""),
+          bookingDate: bookingOf(m),
+          date: m.date || "",
+          time: m.time || "",
+          notes: m.notes || "",
+          type: m.type || "reuniao",
         });
       }
-    });
-    return () => { unsubAuth(); unsubSnapshot(); };
-  }, []);
+      function setEF(key, val) { setEditForm((f) => ({ ...f, [key]: val })); }
 
-  async function createMeeting(data) {
-    await db.collection("meetings").add({ ...data, reagendamentos: 0, criadoEm: new Date().toISOString() });
-  }
-  async function updateMeeting(id, data) {
-    await db.collection("meetings").doc(id).update(data);
-  }
+      async function salvarEdicao(m) {
+        const f = editForm;
+        if (!f.schedulerName || !f.closer || !f.clientName || !f.bookingDate || !f.date || !f.time) {
+          alert("Preencha todos os campos obrigatórios (*).");
+          return;
+        }
+        // Trava: 1 reunião por horário por Closer (ignora este próprio e cancelados)
+        const conflito = meetings.find(
+          (x) =>
+            x.id !== m.id &&
+            x.closer === f.closer &&
+            x.date === f.date &&
+            x.time === f.time &&
+            x.status !== "cancelado"
+        );
+        if (conflito) {
+          alert(`${f.closer} já tem uma reunião em ${fmtDate(f.date)} às ${f.time}. Escolha outro horário ou closer.`);
+          return;
+        }
+        const telefone = f.clientPhone ? `${f.clientPhoneCountry} ${f.clientPhone}`.trim() : "";
+        try {
+          await db.collection("meetings").doc(m.id).update({
+            schedulerName: f.schedulerName,
+            schedulerRole: f.schedulerRole,
+            closer: f.closer,
+            clientName: f.clientName,
+            clientPhone: telefone,
+            bookingDate: f.bookingDate,
+            date: f.date,
+            time: f.time,
+            notes: f.notes,
+            type: f.type,
+          });
+          setEditId(null);
+          setEditForm(null);
+        } catch (err) { console.error(err); alert("Erro ao salvar a edição."); }
+      }
 
-  if (authError) {
-    return (
-      <div className="min-h-screen flex items-center justify-center p-6">
-        <div className="bg-white border border-red-200 rounded-xl p-6 max-w-lg text-center">
-          <p className="text-red-700 font-semibold mb-2">Erro de autenticação</p>
-          <p className="text-slate-600 text-sm">{authError}</p>
-        </div>
-      </div>
-    );
-  }
+      const filtered = meetings
+        .filter((m) =>
+          (fCloser === "todos" || m.closer === fCloser) &&
+          (fStatus === "todos" || m.status === fStatus) &&
+          (fSched  === "todos" || m.schedulerName === fSched) &&
+          (fType   === "todos" || (m.type || "reuniao") === fType)
+        )
+        .sort((a, b) => {
+          if (sortBy === "date_asc")  return (a.date + a.time).localeCompare(b.date + b.time);
+          if (sortBy === "date_desc") return (b.date + b.time).localeCompare(a.date + a.time);
+          return new Date(b.createdAt || 0) - new Date(a.createdAt || 0);
+        });
 
-  return (
-    <div className="min-h-screen">
-      <header style={{ backgroundColor: NAVY }} className="text-white shadow-md">
-        <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between flex-wrap gap-2">
-          <div className="flex items-center gap-2">
-            <span className="text-lg font-bold tracking-wide">MMADV</span>
-            <span className="text-sm text-slate-300">| Agendamento Comercial</span>
-          </div>
-          <nav className="flex gap-1">
-            {[
-              ["dashboard", "📊 Dashboard"],
-              ["agendar", "➕ Agendar"],
-              ["agenda", "🗓️ Agenda"],
-            ].map(([key, label]) => (
-              <button
-                key={key}
-                onClick={() => setView(key)}
-                className={`px-4 py-2 rounded-md text-sm font-medium transition ${
-                  view === key ? "bg-white text-slate-900" : "text-slate-200 hover:bg-white/10"
-                }`}
-                style={view === key ? { color: NAVY } : {}}
-              >
-                {label}
-              </button>
-            ))}
-          </nav>
-        </div>
-      </header>
+      const stats = {
+        agendado:  meetings.filter((m) => m.status === "agendado").length,
+        realizado: meetings.filter((m) => m.status === "realizado").length,
+        cancelado: meetings.filter((m) => m.status === "cancelado").length,
+        noshow:    meetings.filter((m) => m.status === "noshow").length,
+      };
 
-      <main className="max-w-7xl mx-auto px-4 py-6">
-        {dataError && (
-          <div className="mb-4 bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg p-3">{dataError}</div>
-        )}
-        {loading || !authReady ? (
-          <div className="text-center py-20 text-slate-500">Carregando agendamentos…</div>
-        ) : (
-          <React.Fragment>
-            {view === "dashboard" && <Dashboard meetings={meetings} />}
-            {view === "agendar" && <Agendar onCreate={createMeeting} meetings={meetings} onDone={() => setView("agenda")} />}
-            {view === "agenda" && <Agenda meetings={meetings} onUpdate={updateMeeting} />}
-          </React.Fragment>
-        )}
-      </main>
-    </div>
-  );
-}
+      const closerStats = CLOSERS.map((name) => ({
+        name,
+        agendado:  meetings.filter((m) => m.closer === name && m.status === "agendado").length,
+        realizado: meetings.filter((m) => m.closer === name && m.status === "realizado").length,
+        noshow:    meetings.filter((m) => m.closer === name && m.status === "noshow").length,
+        total:     meetings.filter((m) => m.closer === name).length,
+      }));
 
-/* ================= DASHBOARD ================= */
-function Dashboard({ meetings }) {
-  const [periodType, setPeriodType] = useState("total"); // 'semana' | 'mes' | 'total'
-  const [periodValue, setPeriodValue] = useState("");
-  const [rankBase, setRankBase] = useState("reuniao"); // 'reuniao' | 'agendamento'
+      const schedStats = ALL_SCHEDULERS.map((s) => ({
+        ...s,
+        total: meetings.filter((m) => m.schedulerName === s.name).length,
+      }));
 
-  const semanasDisponiveis = useMemo(() => {
-    const s = new Set(meetings.map((m) => isoWeekKey(m.dataAgendamento)).filter(Boolean));
-    s.add(isoWeekKey(todayISO()));
-    return Array.from(s).sort().reverse();
-  }, [meetings]);
-  const mesesDisponiveis = useMemo(() => {
-    const s = new Set(meetings.map((m) => mesKey(m.dataAgendamento)).filter(Boolean));
-    s.add(mesKey(todayISO()));
-    return Array.from(s).sort().reverse();
-  }, [meetings]);
+      // Data de referência do ranking (reunião ou agendamento)
+      const refDate = (m) => (rankDateRef === "agendamento" ? bookingOf(m) : m.date);
 
-  useEffect(() => {
-    if (periodType === "semana" && !periodValue) setPeriodValue(semanasDisponiveis[0] || "");
-    if (periodType === "mes" && !periodValue) setPeriodValue(mesesDisponiveis[0] || "");
-  }, [periodType]);
+      // Listas de meses e semanas disponíveis (conforme a referência escolhida)
+      const datedMeetings = meetings.filter((m) => refDate(m));
+      const availableMonths = [...new Set(datedMeetings.map((m) => refDate(m).slice(0, 7)))].sort().reverse();
+      const availableWeeks  = [...new Set(datedMeetings.map((m) => weekStart(refDate(m)).toISOString().slice(0, 10)))].sort().reverse();
 
-  function inPeriod(m) {
-    const refField = rankBase === "reuniao" ? m.dataReuniao : m.dataAgendamento;
-    if (periodType === "total") return true;
-    if (periodType === "semana") return isoWeekKey(refField) === periodValue;
-    if (periodType === "mes") return mesKey(refField) === periodValue;
-    return true;
-  }
+      // Garante que o período atual apareça na lista mesmo sem dados
+      if (!availableMonths.includes(rankMonth)) availableMonths.unshift(rankMonth);
+      if (!availableWeeks.includes(rankWeek))   availableWeeks.unshift(rankWeek);
 
-  const filtrados = meetings.filter(inPeriod);
-  const total = filtrados.length;
-  const realizados = filtrados.filter((m) => m.status === "Realizado").length;
-  const noshow = filtrados.filter((m) => m.status === "No-show").length;
-  const cancelados = filtrados.filter((m) => m.status === "Cancelado").length;
-  const taxaRealizacao = total ? ((realizados / total) * 100).toFixed(1) : "0.0";
+      // Filtra agendamentos pelo período do ranking selecionado
+      function inRankPeriod(m) {
+        const d = refDate(m);
+        if (!d) return false;
+        if (rankPeriod === "total")  return true;
+        if (rankPeriod === "mes")    return d.slice(0, 7) === rankMonth;
+        if (rankPeriod === "semana") return weekStart(d).toISOString().slice(0, 10) === rankWeek;
+        return true;
+      }
+      const periodMeetings = meetings.filter(inRankPeriod);
 
-  const porAgendador = useMemo(() => {
-    const map = {};
-    AGENDADORES.forEach((a) => (map[a] = 0));
-    filtrados.forEach((m) => { if (m.agendador) map[m.agendador] = (map[m.agendador] || 0) + 1; });
-    return Object.entries(map).sort((a, b) => b[1] - a[1]);
-  }, [filtrados]);
+      const periodoTexto =
+        rankPeriod === "total"  ? "Total geral" :
+        rankPeriod === "mes"    ? monthLabel(rankMonth) :
+        weekLabel(new Date(rankWeek + "T00:00:00"));
 
-  const porCloser = useMemo(() => {
-    const map = {};
-    CLOSERS.forEach((c) => (map[c] = { recebidas: 0, realizadas: 0, noshow: 0 }));
-    filtrados.forEach((m) => {
-      if (!m.closer || !map[m.closer]) return;
-      map[m.closer].recebidas += 1;
-      if (m.status === "Realizado") map[m.closer].realizadas += 1;
-      if (m.status === "No-show") map[m.closer].noshow += 1;
-    });
-    return Object.entries(map).sort((a, b) => b[1].realizadas - a[1].realizadas);
-  }, [filtrados]);
+      // Ranking: quem mais agendou (SDR + Social Seller) no período
+      const rankAgendadores = ALL_SCHEDULERS
+        .map((s) => ({ ...s, total: periodMeetings.filter((m) => m.schedulerName === s.name).length }))
+        .sort((a, b) => b.total - a.total);
 
-  const ultimasSemanas = useMemo(() => {
-    const map = {};
-    meetings.forEach((m) => {
-      const wk = isoWeekKey(m.dataAgendamento);
-      if (wk) map[wk] = (map[wk] || 0) + 1;
-    });
-    return Object.entries(map).sort((a, b) => a[0].localeCompare(b[0])).slice(-8);
-  }, [meetings]);
-  const maxSemana = Math.max(1, ...ultimasSemanas.map(([, v]) => v));
+      // Ranking: closers com mais reuniões realizadas no período
+      const rankClosers = CLOSERS
+        .map((name) => ({
+          name,
+          realizado: periodMeetings.filter((m) => m.closer === name && m.status === "realizado").length,
+        }))
+        .sort((a, b) => b.realizado - a.realizado);
 
-  return (
-    <div className="space-y-6">
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <StatCard label="Total no período" value={total} color={NAVY} />
-        <StatCard label="Realizadas" value={realizados} color="#2F8F5B" />
-        <StatCard label="No-show" value={noshow} color="#C0392B" />
-        <StatCard label="Taxa de realização" value={`${taxaRealizacao}%`} color={GOLD} />
-      </div>
+      const medalha = (i) => (i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : `${i + 1}º`);
 
-      <div className="bg-white rounded-xl border border-slate-200 p-4">
-        <div className="flex flex-wrap items-center gap-3 mb-4">
-          <span className="text-sm font-semibold text-slate-700">🏅 Ranking por período:</span>
-          {["semana", "mes", "total"].map((p) => (
-            <button
-              key={p}
-              onClick={() => { setPeriodType(p); setPeriodValue(""); }}
-              className={`px-3 py-1.5 rounded-md text-sm font-medium border ${
-                periodType === p ? "text-white border-transparent" : "text-slate-600 border-slate-300 hover:bg-slate-50"
-              }`}
-              style={periodType === p ? { backgroundColor: NAVY } : {}}
-            >
-              {p === "semana" ? "Semana" : p === "mes" ? "Mês" : "Total"}
-            </button>
-          ))}
-          {periodType === "semana" && (
-            <select value={periodValue} onChange={(e) => setPeriodValue(e.target.value)} className="border border-slate-300 rounded-md px-2 py-1.5 text-sm">
-              {semanasDisponiveis.map((w) => <option key={w} value={w}>{weekLabel(w)}</option>)}
-            </select>
-          )}
-          {periodType === "mes" && (
-            <select value={periodValue} onChange={(e) => setPeriodValue(e.target.value)} className="border border-slate-300 rounded-md px-2 py-1.5 text-sm">
-              {mesesDisponiveis.map((mk) => <option key={mk} value={mk}>{mesLabelBR(mk)}</option>)}
-            </select>
-          )}
-          <span className="text-xs text-slate-400 ml-auto">Base da data: reunião</span>
-        </div>
-
-        <div className="grid md:grid-cols-2 gap-6">
-          <div>
-            <h3 className="text-sm font-semibold text-slate-700 mb-2">🏆 Quem mais agendou (SDR / Social Seller)</h3>
-            <table className="w-full text-sm">
-              <tbody>
-                {porAgendador.map(([nome, qtd], i) => (
-                  <tr key={nome} className="border-b border-slate-100">
-                    <td className="py-1.5 text-slate-500 w-6">{i + 1}º</td>
-                    <td className="py-1.5">{nome} <span className="text-xs text-slate-400">({AGENDADOR_FUNCAO[nome]})</span></td>
-                    <td className="py-1.5 text-right font-semibold" style={{ color: NAVY }}>{qtd}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <div>
-            <h3 className="text-sm font-semibold text-slate-700 mb-2">✅ Closers — reuniões realizadas</h3>
-            <table className="w-full text-sm">
-              <tbody>
-                {porCloser.map(([nome, v], i) => (
-                  <tr key={nome} className="border-b border-slate-100">
-                    <td className="py-1.5 text-slate-500 w-6">{i + 1}º</td>
-                    <td className="py-1.5">{nome}</td>
-                    <td className="py-1.5 text-right font-semibold" style={{ color: GOLD }}>{v.realizadas}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-
-      <div className="bg-white rounded-xl border border-slate-200 p-4">
-        <h3 className="text-sm font-semibold text-slate-700 mb-3">Desempenho por Closer (recebidas x realizadas x no-show) — período selecionado</h3>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="text-left text-slate-500 border-b border-slate-200">
-                <th className="py-2">Closer</th>
-                <th className="py-2 text-right">Recebidas</th>
-                <th className="py-2 text-right">Realizadas</th>
-                <th className="py-2 text-right">No-show</th>
-                <th className="py-2 text-right">Taxa realização</th>
-              </tr>
-            </thead>
-            <tbody>
-              {porCloser.map(([nome, v]) => (
-                <tr key={nome} className="border-b border-slate-100">
-                  <td className="py-2">{nome}</td>
-                  <td className="py-2 text-right">{v.recebidas}</td>
-                  <td className="py-2 text-right">{v.realizadas}</td>
-                  <td className="py-2 text-right">{v.noshow}</td>
-                  <td className="py-2 text-right font-semibold" style={{ color: NAVY }}>
-                    {v.recebidas ? ((v.realizadas / v.recebidas) * 100).toFixed(1) : "0.0"}%
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      <div className="bg-white rounded-xl border border-slate-200 p-4">
-        <h3 className="text-sm font-semibold text-slate-700 mb-3">Agendamentos por semana (últimas 8 semanas — todas as datas)</h3>
-        <div className="flex items-end gap-3 h-40">
-          {ultimasSemanas.map(([wk, v]) => (
-            <div key={wk} className="flex-1 flex flex-col items-center gap-1">
-              <span className="text-xs text-slate-500">{v}</span>
-              <div className="w-full rounded-t-md" style={{ height: `${(v / maxSemana) * 100}px`, backgroundColor: NAVY, minHeight: "4px" }}></div>
-              <span className="text-[10px] text-slate-400">{wk.split("-S")[1]}</span>
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function StatCard({ label, value, color }) {
-  return (
-    <div className="bg-white rounded-xl border border-slate-200 p-4">
-      <div className="text-2xl font-bold" style={{ color }}>{value}</div>
-      <div className="text-xs text-slate-500 mt-1">{label}</div>
-    </div>
-  );
-}
-
-/* ================= AGENDAR ================= */
-function Agendar({ onCreate, meetings, onDone }) {
-  const [form, setForm] = useState({
-    tipo: "Reunião",
-    cliente: "",
-    ddi: "55",
-    telefone: "",
-    agendador: AGENDADORES[0],
-    closer: CLOSERS[0],
-    dataAgendamento: todayISO(),
-    dataReuniao: todayISO(),
-    horario: "",
-    observacoes: "",
-  });
-  const [conflito, setConflito] = useState(null);
-  const [saving, setSaving] = useState(false);
-  const [okMsg, setOkMsg] = useState(false);
-
-  function set(field, value) {
-    setForm((f) => ({ ...f, [field]: value }));
-  }
-
-  function checkConflito(f) {
-    return meetings.find(
-      (m) => m.closer === f.closer && m.dataReuniao === f.dataReuniao && m.horario === f.horario && m.status !== "Cancelado"
-    );
-  }
-
-  async function handleSubmit(e) {
-    e.preventDefault();
-    if (!form.cliente || !form.horario || !form.dataReuniao) return;
-    const c = checkConflito(form);
-    if (c) { setConflito(c); return; }
-    setSaving(true);
-    try {
-      await onCreate({
-        tipo: form.tipo,
-        cliente: form.cliente,
-        telefone: `+${form.ddi} ${form.telefone}`,
-        agendador: form.agendador,
-        funcao: AGENDADOR_FUNCAO[form.agendador],
-        closer: form.closer,
-        dataAgendamento: form.dataAgendamento,
-        dataReuniao: form.dataReuniao,
-        horario: form.horario,
-        status: "Agendado",
-        observacoes: form.observacoes,
+      // Métrica semanal (agrupa pela segunda-feira da semana da data do agendamento)
+      const weekMap = {};
+      meetings.forEach((m) => {
+        if (!m.date) return;
+        const monday = weekStart(m.date);
+        const key = monday.toISOString().slice(0, 10);
+        if (!weekMap[key]) weekMap[key] = { key, monday, total: 0, realizado: 0, reuniao: 0, consulta: 0 };
+        weekMap[key].total++;
+        if (m.status === "realizado") weekMap[key].realizado++;
+        if ((m.type || "reuniao") === "consulta") weekMap[key].consulta++;
+        else weekMap[key].reuniao++;
       });
-      setOkMsg(true);
-      setForm((f) => ({ ...f, cliente: "", telefone: "", horario: "", observacoes: "" }));
-      setTimeout(() => setOkMsg(false), 3000);
-    } finally {
-      setSaving(false);
+      const weekStats = Object.values(weekMap).sort((a, b) => b.key.localeCompare(a.key)).slice(0, 8);
+      const weekMax = weekStats.reduce((mx, w) => Math.max(mx, w.total), 0) || 1;
+
+      if (loading) {
+        return (
+          <div className="flex flex-col items-center justify-center min-h-screen gap-3" style={{ color: NAVY }}>
+            <div className="w-8 h-8 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>
+            <p className="text-sm text-gray-500">Conectando ao banco de dados...</p>
+          </div>
+        );
+      }
+
+      const inputCls = "w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500";
+      const labelCls = "block text-xs font-bold uppercase tracking-wide text-gray-500 mb-1.5";
+
+      return (
+        <div className="min-h-screen" style={{ background: "#F0EEE9" }}>
+
+          {/* Header */}
+          <header style={{ background: NAVY }} className="shadow-lg sticky top-0 z-10">
+            <div className="max-w-6xl mx-auto px-6 flex items-center justify-between h-16">
+              <div className="flex items-center gap-3">
+                <div style={{ background: GOLD, color: NAVY, borderRadius: 8, width: 38, height: 38,
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  fontWeight: 900, fontSize: 13, letterSpacing: 1 }}>MM</div>
+                <div>
+                  <div className="text-white font-black text-sm tracking-widest">MMADV</div>
+                  <div className="text-white/40 text-xs mt-0.5">Agendamentos Comerciais</div>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-4">
+                <div className="flex items-center gap-1.5">
+                  {connected ? (
+                    <>
+                      <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse inline-block"></span>
+                      <span className="text-white/40 text-xs hidden sm:block">Ao vivo</span>
+                    </>
+                  ) : (
+                    <>
+                      <span className="text-red-400"><IconWifiOff size={13} /></span>
+                      <span className="text-red-400 text-xs hidden sm:block">Desconectado</span>
+                    </>
+                  )}
+                </div>
+
+                <nav className="flex gap-1">
+                  {[
+                    { k: "dashboard", label: "Dashboard", Icon: IconChart },
+                    { k: "agendar",   label: "Agendar",   Icon: IconPlus },
+                    { k: "agenda",    label: "Agenda",     Icon: IconCalendar },
+                  ].map(({ k, label, Icon }) => (
+                    <button key={k} onClick={() => setTab(k)} style={{
+                      background: tab === k ? GOLD : "transparent",
+                      color: tab === k ? NAVY : "rgba(255,255,255,0.65)",
+                      border: "none", borderRadius: 8, cursor: "pointer",
+                      padding: "8px 16px", fontWeight: tab === k ? 700 : 500,
+                      fontSize: 13, display: "flex", alignItems: "center", gap: 6,
+                    }}>
+                      <Icon size={14} /> {label}
+                    </button>
+                  ))}
+                </nav>
+              </div>
+            </div>
+          </header>
+
+          {dbError && (
+            <div className="bg-red-50 border-b-2 border-red-300 px-6 py-3 flex items-center gap-2 text-red-700 text-sm">
+              <IconAlert size={16} /> <strong>Erro de conexão:</strong> {dbError}
+            </div>
+          )}
+
+          <main className="max-w-6xl mx-auto px-6 py-8">
+
+            {/* DASHBOARD */}
+            {tab === "dashboard" && (
+              <div className="space-y-6">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  {[
+                    { k: "agendado",  label: "Agendados",  icon: "🕐", color: "#1D4ED8", accent: "#3B82F6" },
+                    { k: "realizado", label: "Realizados", icon: "✅", color: "#15803D", accent: "#22C55E" },
+                    { k: "cancelado", label: "Cancelados", icon: "✕", color: "#B91C1C", accent: "#EF4444" },
+                    { k: "noshow",    label: "No-show",    icon: "👻", color: "#B45309", accent: "#F59E0B" },
+                  ].map(({ k, label, icon, color, accent }) => (
+                    <div key={k} className="bg-white rounded-xl p-5 shadow-sm flex items-center gap-4"
+                      style={{ borderLeft: `4px solid ${accent}` }}>
+                      <span style={{ fontSize: 28 }}>{icon}</span>
+                      <div>
+                        <div style={{ color, fontSize: 32, fontWeight: 900, lineHeight: 1 }}>{stats[k]}</div>
+                        <div className="text-xs text-gray-400 mt-1">{label}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* ── MÉTRICA SEMANAL ── */}
+                <div className="bg-white rounded-xl shadow-sm overflow-hidden">
+                  <div className="px-5 py-4 border-b border-gray-100 flex items-center gap-2">
+                    <span style={{ background: "#E8EDF6", color: NAVY, borderRadius: 6, padding: "3px 10px", fontSize: 11, fontWeight: 700 }}>SEMANAL</span>
+                    <span className="font-semibold text-sm" style={{ color: NAVY }}>📅 Agendamentos por Semana</span>
+                  </div>
+                  <div className="p-5 space-y-3">
+                    {weekStats.length === 0 && (
+                      <div className="text-center text-gray-400 text-sm py-6">Nenhum agendamento ainda</div>
+                    )}
+                    {weekStats.map((w) => {
+                      const pct = Math.round((w.total / weekMax) * 100);
+                      return (
+                        <div key={w.key} className="flex items-center gap-4">
+                          <div className="text-xs font-bold" style={{ color: NAVY, minWidth: 110 }}>{weekLabel(w.monday)}</div>
+                          <div className="flex-1">
+                            <div style={{ height: 24, background: "#F3F4F6", borderRadius: 8, overflow: "hidden", position: "relative" }}>
+                              <div style={{ height: "100%", width: `${pct}%`, background: NAVY, borderRadius: 8, transition: "width 0.4s", minWidth: w.total > 0 ? 28 : 0, display: "flex", alignItems: "center", justifyContent: "flex-end" }}>
+                                {w.total > 0 && <span style={{ color: "#fff", fontSize: 12, fontWeight: 800, paddingRight: 8 }}>{w.total}</span>}
+                              </div>
+                            </div>
+                          </div>
+                          <div className="flex gap-3 text-xs shrink-0" style={{ minWidth: 200 }}>
+                            <span style={{ color: "#15803D" }}>✅ {w.realizado} realiz.</span>
+                            <span style={{ color: "#6B7280" }}>🤝 {w.reuniao}</span>
+                            <span style={{ color: "#8B6914" }}>💬 {w.consulta}</span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="grid gap-5 lg:grid-cols-[1.5fr_1fr]">
+                  <div className="bg-white rounded-xl shadow-sm overflow-hidden">
+                    <div className="px-5 py-4 border-b border-gray-100 flex items-center gap-2">
+                      <span style={{ background: "#FBF3E3", color: "#8B6914", borderRadius: 6, padding: "3px 10px", fontSize: 11, fontWeight: 700 }}>CLOSERS</span>
+                      <span className="font-semibold text-sm" style={{ color: NAVY }}>Performance</span>
+                    </div>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="bg-gray-50">
+                            {["Closer","Pendente","Realizado","No-show","Total"].map((h) => (
+                              <th key={h} className="px-4 py-3 text-xs font-bold uppercase tracking-wide text-gray-400"
+                                style={{ textAlign: h === "Closer" ? "left" : "center" }}>{h}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {closerStats.map((c) => (
+                            <tr key={c.name} className="border-t border-gray-50 hover:bg-gray-50">
+                              <td className="px-4 py-3 font-semibold" style={{ color: NAVY }}>{c.name}</td>
+                              <td className="px-4 py-3 text-center"><CountBadge n={c.agendado}  color="#1D4ED8" bg="#DBEAFE" /></td>
+                              <td className="px-4 py-3 text-center"><CountBadge n={c.realizado} color="#15803D" bg="#DCFCE7" /></td>
+                              <td className="px-4 py-3 text-center"><CountBadge n={c.noshow}    color="#B45309" bg="#FEF3C7" /></td>
+                              <td className="px-4 py-3 text-center font-black text-base" style={{ color: NAVY }}>{c.total}</td>
+                            </tr>
+                          ))}
+                          {closerStats.every((c) => c.total === 0) && (
+                            <tr><td colSpan={5} className="px-5 py-10 text-center text-gray-400 text-sm">Nenhum agendamento ainda</td></tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col gap-4">
+                    <div className="bg-white rounded-xl shadow-sm overflow-hidden flex-1">
+                      <div className="px-5 py-4 border-b border-gray-100 font-semibold text-sm" style={{ color: NAVY }}>📊 Agendadores</div>
+                      {schedStats.map((s) => (
+                        <div key={s.name} className="px-5 py-3.5 border-b border-gray-50 last:border-0 flex items-center justify-between">
+                          <div>
+                            <div className="font-semibold text-sm" style={{ color: NAVY }}>{s.name}</div>
+                            <div className="text-xs text-gray-400">{s.role}</div>
+                          </div>
+                          <div className="font-black text-2xl" style={{ color: NAVY }}>{s.total}</div>
+                        </div>
+                      ))}
+                    </div>
+                    <button onClick={() => setTab("agendar")}
+                      className="w-full py-4 rounded-xl font-bold text-white flex items-center justify-center gap-2 text-sm"
+                      style={{ background: NAVY, border: "none", cursor: "pointer" }}>
+                      <IconPlus size={16} /> Novo Agendamento
+                    </button>
+                  </div>
+                </div>
+
+                {/* ── RANKINGS ── */}
+                <div className="bg-white rounded-xl shadow-sm p-4 flex flex-wrap items-center gap-3">
+                  <span className="font-semibold text-sm mr-1" style={{ color: NAVY }}>🏅 Ranking por:</span>
+                  <div className="flex gap-1 bg-gray-100 rounded-lg p-1">
+                    {[["reuniao","📆 Dia da reunião"],["agendamento","✍️ Dia do agendamento"]].map(([v, l]) => (
+                      <button key={v} onClick={() => setRankDateRef(v)}
+                        style={{
+                          background: rankDateRef === v ? GOLD : "transparent",
+                          color: rankDateRef === v ? NAVY : "#6B7280",
+                          border: "none", borderRadius: 6, padding: "6px 14px",
+                          fontSize: 13, fontWeight: 700, cursor: "pointer",
+                        }}>
+                        {l}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="flex gap-1 bg-gray-100 rounded-lg p-1">
+                    {[["semana","Semana"],["mes","Mês"],["total","Total"]].map(([v, l]) => (
+                      <button key={v} onClick={() => setRankPeriod(v)}
+                        style={{
+                          background: rankPeriod === v ? NAVY : "transparent",
+                          color: rankPeriod === v ? "#fff" : "#6B7280",
+                          border: "none", borderRadius: 6, padding: "6px 16px",
+                          fontSize: 13, fontWeight: 700, cursor: "pointer",
+                        }}>
+                        {l}
+                      </button>
+                    ))}
+                  </div>
+                  {rankPeriod === "semana" && (
+                    <select value={rankWeek} onChange={(e) => setRankWeek(e.target.value)}
+                      className="border border-gray-200 rounded-lg px-3 py-2 text-sm bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                      {availableWeeks.map((w) => (
+                        <option key={w} value={w}>{weekLabel(new Date(w + "T00:00:00"))}</option>
+                      ))}
+                    </select>
+                  )}
+                  {rankPeriod === "mes" && (
+                    <select value={rankMonth} onChange={(e) => setRankMonth(e.target.value)}
+                      className="border border-gray-200 rounded-lg px-3 py-2 text-sm bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                      {availableMonths.map((mo) => (
+                        <option key={mo} value={mo}>{monthLabel(mo)}</option>
+                      ))}
+                    </select>
+                  )}
+                  <span className="text-xs text-gray-400 ml-auto">
+                    {rankDateRef === "agendamento" ? "Por dia do agendamento" : "Por dia da reunião"} · <strong style={{ color: NAVY }}>{periodoTexto}</strong>
+                  </span>
+                </div>
+
+                <div className="grid gap-5 md:grid-cols-2">
+                  {/* Ranking agendadores */}
+                  <div className="bg-white rounded-xl shadow-sm overflow-hidden">
+                    <div className="px-5 py-4 border-b border-gray-100 flex items-center gap-2">
+                      <span style={{ background: "#FBF3E3", color: "#8B6914", borderRadius: 6, padding: "3px 10px", fontSize: 11, fontWeight: 700 }}>RANKING</span>
+                      <span className="font-semibold text-sm" style={{ color: NAVY }}>🏆 Quem mais agendou</span>
+                    </div>
+                    <div className="p-2">
+                      {rankAgendadores.map((s, i) => {
+                        const max = rankAgendadores[0].total || 1;
+                        const pct = Math.round((s.total / max) * 100);
+                        return (
+                          <div key={s.name} className="flex items-center gap-3 px-3 py-2.5">
+                            <span style={{ fontSize: i < 3 ? 18 : 13, fontWeight: 800, color: i < 3 ? NAVY : "#9CA3AF", minWidth: 28, textAlign: "center" }}>{medalha(i)}</span>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center justify-between mb-1">
+                                <span className="font-semibold text-sm truncate" style={{ color: NAVY }}>{s.name} <span className="text-xs text-gray-400 font-normal">· {s.role}</span></span>
+                                <span className="font-black text-sm ml-2" style={{ color: NAVY }}>{s.total}</span>
+                              </div>
+                              <div style={{ height: 6, background: "#F3F4F6", borderRadius: 99, overflow: "hidden" }}>
+                                <div style={{ height: "100%", width: `${pct}%`, background: GOLD, borderRadius: 99, transition: "width 0.4s" }}></div>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Ranking closers por realizadas */}
+                  <div className="bg-white rounded-xl shadow-sm overflow-hidden">
+                    <div className="px-5 py-4 border-b border-gray-100 flex items-center gap-2">
+                      <span style={{ background: "#DCFCE7", color: "#15803D", borderRadius: 6, padding: "3px 10px", fontSize: 11, fontWeight: 700 }}>RANKING</span>
+                      <span className="font-semibold text-sm" style={{ color: NAVY }}>✅ Closers — reuniões realizadas</span>
+                    </div>
+                    <div className="p-2">
+                      {rankClosers.map((c, i) => {
+                        const max = rankClosers[0].realizado || 1;
+                        const pct = Math.round((c.realizado / max) * 100);
+                        return (
+                          <div key={c.name} className="flex items-center gap-3 px-3 py-2.5">
+                            <span style={{ fontSize: i < 3 ? 18 : 13, fontWeight: 800, color: i < 3 ? NAVY : "#9CA3AF", minWidth: 28, textAlign: "center" }}>{medalha(i)}</span>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center justify-between mb-1">
+                                <span className="font-semibold text-sm truncate" style={{ color: NAVY }}>{c.name}</span>
+                                <span className="font-black text-sm ml-2" style={{ color: "#15803D" }}>{c.realizado}</span>
+                              </div>
+                              <div style={{ height: 6, background: "#F3F4F6", borderRadius: 99, overflow: "hidden" }}>
+                                <div style={{ height: "100%", width: `${pct}%`, background: "#22C55E", borderRadius: 99, transition: "width 0.4s" }}></div>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-white rounded-xl shadow-sm overflow-hidden">
+                  <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+                    <span className="font-semibold text-sm" style={{ color: NAVY }}>🕑 Últimos Agendamentos</span>
+                    {meetings.length > 0 && (
+                      <button onClick={() => setTab("agenda")} className="text-xs flex items-center gap-0.5 font-semibold"
+                        style={{ color: GOLD, background: "none", border: "none", cursor: "pointer" }}>
+                        Ver todos <IconChevron size={12} />
+                      </button>
+                    )}
+                  </div>
+                  {meetings.slice(0, 6).map((m) => (
+                    <div key={m.id} className="px-5 py-3.5 border-b border-gray-50 last:border-0 flex items-center justify-between">
+                      <div>
+                        <span className="font-semibold text-sm" style={{ color: NAVY }}>{m.clientName}</span>
+                        <span className="text-xs text-gray-400 ml-3">{TYPE_CONFIG[m.type || "reuniao"].icon} {fmtDate(m.date)} {m.time} · Closer: {m.closer} · {m.schedulerName}</span>
+                      </div>
+                      <StatusBadge status={m.status} />
+                    </div>
+                  ))}
+                  {meetings.length === 0 && (
+                    <div className="py-12 text-center text-sm text-gray-400">
+                      Nenhum agendamento ainda.{" "}
+                      <button onClick={() => setTab("agendar")} style={{ color: NAVY, background: "none", border: "none", cursor: "pointer", fontWeight: 700 }}>Criar agora →</button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* AGENDAR */}
+            {tab === "agendar" && (
+              <div className="max-w-lg mx-auto">
+                <div className="bg-white rounded-2xl shadow-lg overflow-hidden">
+                  <div className="px-8 py-7 relative overflow-hidden" style={{ background: NAVY }}>
+                    <div style={{ position: "absolute", right: -24, top: -24, width: 130, height: 130, borderRadius: "50%", background: "rgba(197,162,74,0.12)" }}></div>
+                    <IconPlus size={18} />
+                    <h2 className="text-white font-black text-xl mt-2">Novo Agendamento</h2>
+                    <p className="text-xs mt-1" style={{ color: "rgba(255,255,255,0.45)" }}>Registre uma consulta para os closers</p>
+                  </div>
+
+                  {formOk && (
+                    <div className="px-8 py-3 flex items-center gap-2 text-sm font-bold border-b-2" style={{ background: "#DCFCE7", color: "#15803D", borderColor: "#86EFAC" }}>
+                      <IconCheck size={15} /> Agendamento salvo! Redirecionando...
+                    </div>
+                  )}
+                  {formErr && (
+                    <div className="px-8 py-3 flex items-center gap-2 text-sm font-bold border-b-2" style={{ background: "#FEE2E2", color: "#B91C1C", borderColor: "#FCA5A5" }}>
+                      <IconAlert size={15} /> {formErr}
+                    </div>
+                  )}
+
+                  <div className="px-8 py-7 space-y-5">
+                    {/* Tipo: Reunião ou Consulta */}
+                    <div>
+                      <label className={labelCls}>Tipo de atendimento *</label>
+                      <div className="grid grid-cols-2 gap-3">
+                        {Object.entries(TYPE_CONFIG).map(([key, t]) => {
+                          const active = form.type === key;
+                          return (
+                            <button key={key} type="button" onClick={() => setF("type", key)}
+                              className="flex items-center justify-center gap-2 py-3 rounded-xl font-bold text-sm transition-all"
+                              style={{
+                                border: active ? `2px solid ${t.color}` : "2px solid #E5E7EB",
+                                background: active ? t.bg : "#FAFAFA",
+                                color: active ? t.color : "#9CA3AF",
+                                cursor: "pointer",
+                              }}>
+                              <span style={{ fontSize: 18 }}>{t.icon}</span> {t.label}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className={labelCls}>Agendador *</label>
+                        <select value={form.schedulerName}
+                          onChange={(e) => {
+                            const n = e.target.value;
+                            const s = ALL_SCHEDULERS.find((x) => x.name === n);
+                            setForm((f) => ({ ...f, schedulerName: n, schedulerRole: s ? s.role : "" }));
+                          }} className={inputCls}>
+                          <option value="">Selecione...</option>
+                          <optgroup label="SDR">{TEAM.SDR.map((n) => <option key={n} value={n}>{n}</option>)}</optgroup>
+                          <optgroup label="Social Seller">{TEAM["Social Seller"].map((n) => <option key={n} value={n}>{n}</option>)}</optgroup>
+                        </select>
+                        {form.schedulerRole && <div className="mt-1 text-xs font-bold" style={{ color: GOLD }}>{form.schedulerRole}</div>}
+                      </div>
+                      <div>
+                        <label className={labelCls}>Closer *</label>
+                        <select value={form.closer} onChange={(e) => setF("closer", e.target.value)} className={inputCls}>
+                          <option value="">Selecione...</option>
+                          {CLOSERS.map((c) => <option key={c} value={c}>{c}</option>)}
+                        </select>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className={labelCls}>Nome do Cliente *</label>
+                      <input type="text" placeholder="Nome completo" value={form.clientName} onChange={(e) => setF("clientName", e.target.value)} className={inputCls} />
+                    </div>
+                    <div>
+                      <label className={labelCls}>WhatsApp do Cliente</label>
+                      <div className="flex gap-2">
+                        <select
+                          value={form.clientPhoneCountry}
+                          onChange={(e) => setF("clientPhoneCountry", e.target.value)}
+                          className="border border-gray-200 rounded-lg px-2 py-2.5 text-sm bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          style={{ maxWidth: 130 }}>
+                          {COUNTRY_CODES.map((c, i) => <option key={i} value={c.code}>{c.label}</option>)}
+                        </select>
+                        <input type="tel" placeholder="11 99999-9999" value={form.clientPhone}
+                          onChange={(e) => setF("clientPhone", e.target.value)} className={inputCls + " flex-1"} />
+                      </div>
+                    </div>
+                    <div>
+                      <label className={labelCls}>Data do agendamento *</label>
+                      <input type="date" value={form.bookingDate} onChange={(e) => setF("bookingDate", e.target.value)} className={inputCls} />
+                      <div className="mt-1 text-xs text-gray-400">Dia em que a reunião foi marcada</div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className={labelCls}>Data da reunião *</label>
+                        <input type="date" value={form.date} onChange={(e) => setF("date", e.target.value)} className={inputCls} />
+                      </div>
+                      <div>
+                        <label className={labelCls}>Horário *</label>
+                        <input type="time" value={form.time} onChange={(e) => setF("time", e.target.value)} className={inputCls} />
+                      </div>
+                    </div>
+                    <div>
+                      <label className={labelCls}>Observações</label>
+                      <textarea placeholder="Contexto do lead, urgência, tipo de caso..." value={form.notes}
+                        onChange={(e) => setF("notes", e.target.value)} rows={3} className={inputCls} style={{ resize: "vertical" }}></textarea>
+                    </div>
+
+                    <button onClick={handleSubmit} disabled={saving}
+                      className="w-full py-3.5 rounded-xl font-black text-white text-base flex items-center justify-center gap-2"
+                      style={{ background: NAVY, border: "none", cursor: saving ? "not-allowed" : "pointer", opacity: saving ? 0.7 : 1 }}>
+                      {saving ? "Salvando..." : <>Confirmar Agendamento <IconChevron size={16} /></>}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* AGENDA */}
+            {tab === "agenda" && (
+              <div className="space-y-5">
+                <div className="bg-white rounded-xl shadow-sm p-5">
+                  <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+                    {[
+                      { label: "Tipo", val: fType, set: setFType, opts: [["todos","Todos"],["reuniao","Reunião"],["consulta","Consulta"]] },
+                      { label: "Closer", val: fCloser, set: setFCloser, opts: [["todos","Todos"], ...CLOSERS.map((c) => [c, c])] },
+                      { label: "Status", val: fStatus, set: setFStatus, opts: [["todos","Todos"],["agendado","Agendado"],["realizado","Realizado"],["cancelado","Cancelado"],["noshow","No-show"]] },
+                      { label: "Agendador", val: fSched, set: setFSched, opts: [["todos","Todos"], ...ALL_SCHEDULERS.map((s) => [s.name, `${s.name} (${s.role})`])] },
+                      { label: "Ordenar", val: sortBy, set: setSortBy, opts: [["date_asc","Data ↑"],["date_desc","Data ↓"],["created","Mais recentes"]] },
+                    ].map(({ label, val, set, opts }) => (
+                      <div key={label}>
+                        <div className={labelCls}>{label}</div>
+                        <select value={val} onChange={(e) => set(e.target.value)} className={inputCls}>
+                          {opts.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                        </select>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="mt-4 flex items-center justify-between">
+                    <span className="text-xs text-gray-400">{filtered.length} resultado(s)</span>
+                    <div className="flex gap-2">
+                      <button onClick={exportarExcel} className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold"
+                        style={{ background: "#fff", color: "#15803D", border: "1px solid #86EFAC", cursor: "pointer" }}>
+                        <IconDownload size={13} /> Baixar Excel
+                      </button>
+                      <button onClick={() => setTab("agendar")} className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold text-white"
+                        style={{ background: NAVY, border: "none", cursor: "pointer" }}>
+                        <IconPlus size={13} /> Novo
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  {filtered.map((m) => {
+                    const sc = STATUS_CONFIG[m.status] || STATUS_CONFIG.agendado;
+                    const dayNum = m.date ? m.date.split("-")[2] : "—";
+                    const monStr = m.date ? MONTHS[parseInt(m.date.split("-")[1]) - 1] : "";
+                    return (
+                      <div key={m.id} className="bg-white rounded-xl shadow-sm" style={{ borderLeft: `4px solid ${sc.border}` }}>
+                        <div className="p-5 flex items-start gap-4">
+                        <div className="bg-gray-50 rounded-xl p-3 text-center shrink-0" style={{ minWidth: 56 }}>
+                          <div className="font-black text-2xl leading-none" style={{ color: NAVY }}>{dayNum}</div>
+                          <div className="text-gray-400 text-xs uppercase mt-0.5">{monStr}</div>
+                          <div className="font-bold text-xs mt-2 text-gray-600">{m.time || "—"}</div>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2.5 mb-2 flex-wrap">
+                            <span className="font-black text-base" style={{ color: NAVY }}>{m.clientName}</span>
+                            <StatusBadge status={m.status} />
+                            {(() => {
+                              const t = TYPE_CONFIG[m.type || "reuniao"];
+                              return (
+                                <span style={{ background: t.bg, color: t.color, borderRadius: 99, padding: "2px 10px", fontSize: 11, fontWeight: 700, whiteSpace: "nowrap" }}>
+                                  {t.icon} {t.label}
+                                </span>
+                              );
+                            })()}
+                            {m.rescheduleCount > 0 && (
+                              <span style={{ background: "#FEF3C7", color: "#B45309", borderRadius: 99, padding: "2px 10px", fontSize: 11, fontWeight: 700, whiteSpace: "nowrap" }}>
+                                🔄 Reagendado {m.rescheduleCount}x
+                              </span>
+                            )}
+                          </div>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1">
+                            <span className="flex items-center gap-1.5 text-xs text-gray-500"><IconUser size={11} /> Closer: <strong style={{ color: NAVY, marginLeft: 2 }}>{m.closer}</strong></span>
+                            <span className="flex items-center gap-1.5 text-xs text-gray-500"><IconClock size={11} /> Por: <strong style={{ color: NAVY, marginLeft: 2 }}>{m.schedulerName}</strong> <span className="text-gray-400 ml-1">({m.schedulerRole})</span></span>
+                            <span className="flex items-center gap-1.5 text-xs text-gray-500"><IconCalendar size={11} /> Agendado em: <strong style={{ color: NAVY, marginLeft: 2 }}>{fmtDate(bookingOf(m))}</strong></span>
+                            {m.clientPhone && <span className="flex items-center gap-1.5 text-xs text-gray-500"><IconPhone size={11} /> {m.clientPhone}</span>}
+                          </div>
+                          {m.notes && (
+                            <div className="mt-2.5 bg-gray-50 rounded-lg px-3 py-2 text-xs text-gray-500 flex items-start gap-1.5">
+                              <IconNote size={11} /> {m.notes}
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex flex-col gap-2 shrink-0">
+                          <select value={m.status} onChange={(e) => updateStatus(m.id, e.target.value)}
+                            className="border border-gray-200 rounded-lg px-2 py-1.5 text-xs font-bold cursor-pointer bg-gray-50 outline-none" style={{ color: NAVY }}>
+                            <option value="agendado">Agendado</option>
+                            <option value="realizado">Realizado</option>
+                            <option value="cancelado">Cancelado</option>
+                            <option value="noshow">No-show</option>
+                          </select>
+                          <button onClick={() => (editId === m.id ? (setEditId(null), setEditForm(null)) : abrirEditar(m))}
+                            className="flex items-center justify-center gap-1 border rounded-lg px-2 py-1.5 text-xs font-semibold hover:bg-blue-50"
+                            style={{ borderColor: "#93C5FD", color: "#1D4ED8", background: editId === m.id ? "#DBEAFE" : "none", cursor: "pointer" }}>
+                            <IconEdit size={11} /> Editar
+                          </button>
+                          <button onClick={() => (reschedId === m.id ? setReschedId(null) : abrirReagendar(m))}
+                            className="flex items-center justify-center gap-1 border rounded-lg px-2 py-1.5 text-xs font-semibold hover:bg-amber-50"
+                            style={{ borderColor: "#FCD34D", color: "#B45309", background: reschedId === m.id ? "#FEF3C7" : "none", cursor: "pointer" }}>
+                            <IconRefresh size={11} /> Reagendar
+                          </button>
+                          <button onClick={() => removeMeeting(m.id)}
+                            className="flex items-center justify-center gap-1 border rounded-lg px-2 py-1.5 text-xs font-semibold hover:bg-red-50"
+                            style={{ borderColor: "#FCA5A5", color: "#B91C1C", background: "none", cursor: "pointer" }}>
+                            <IconTrash size={11} /> Remover
+                          </button>
+                        </div>
+                        </div>
+
+                        {/* Painel de reagendamento */}
+                        {reschedId === m.id && (
+                          <div className="px-5 pb-5 pt-1">
+                            <div className="rounded-xl p-4" style={{ background: "#FFFBEB", border: "1px solid #FCD34D" }}>
+                              <div className="flex items-center gap-2 mb-3 text-sm font-bold" style={{ color: "#B45309" }}>
+                                <IconRefresh size={14} /> Reagendar reunião de {m.clientName}
+                              </div>
+                              <div className="flex flex-wrap items-end gap-3">
+                                <div>
+                                  <label className="block text-xs font-bold uppercase tracking-wide text-gray-500 mb-1.5">Nova data</label>
+                                  <input type="date" value={reschedDate} onChange={(e) => setReschedDate(e.target.value)}
+                                    className="border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-amber-400" />
+                                </div>
+                                <div>
+                                  <label className="block text-xs font-bold uppercase tracking-wide text-gray-500 mb-1.5">Novo horário</label>
+                                  <input type="time" value={reschedTime} onChange={(e) => setReschedTime(e.target.value)}
+                                    className="border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-amber-400" />
+                                </div>
+                                <button onClick={() => confirmarReagendar(m)}
+                                  className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-bold text-white"
+                                  style={{ background: "#B45309", border: "none", cursor: "pointer" }}>
+                                  <IconCheck size={13} /> Confirmar
+                                </button>
+                                <button onClick={() => setReschedId(null)}
+                                  className="px-4 py-2 rounded-lg text-sm font-semibold"
+                                  style={{ border: "1px solid #E5E7EB", color: "#6B7280", background: "#fff", cursor: "pointer" }}>
+                                  Cancelar
+                                </button>
+                              </div>
+                              <div className="mt-2 text-xs text-gray-400">A reunião volta para o status "Agendado" na nova data.</div>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Painel de edição completa */}
+                        {editId === m.id && editForm && (
+                          <div className="px-5 pb-5 pt-1">
+                            <div className="rounded-xl p-4" style={{ background: "#EFF6FF", border: "1px solid #93C5FD" }}>
+                              <div className="flex items-center gap-2 mb-4 text-sm font-bold" style={{ color: "#1D4ED8" }}>
+                                <IconEdit size={14} /> Editar agendamento de {m.clientName}
+                              </div>
+
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                  <label className={labelCls}>Tipo *</label>
+                                  <div className="flex gap-2">
+                                    {Object.entries(TYPE_CONFIG).map(([key, t]) => {
+                                      const active = editForm.type === key;
+                                      return (
+                                        <button key={key} type="button" onClick={() => setEF("type", key)}
+                                          className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg font-bold text-xs"
+                                          style={{ border: active ? `2px solid ${t.color}` : "2px solid #E5E7EB", background: active ? t.bg : "#fff", color: active ? t.color : "#9CA3AF", cursor: "pointer" }}>
+                                          {t.icon} {t.label}
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                                <div>
+                                  <label className={labelCls}>Closer *</label>
+                                  <select value={editForm.closer} onChange={(e) => setEF("closer", e.target.value)} className={inputCls + " bg-white"}>
+                                    <option value="">Selecione...</option>
+                                    {CLOSERS.map((c) => <option key={c} value={c}>{c}</option>)}
+                                  </select>
+                                </div>
+                                <div>
+                                  <label className={labelCls}>Agendador *</label>
+                                  <select value={editForm.schedulerName}
+                                    onChange={(e) => { const n = e.target.value; const s = ALL_SCHEDULERS.find((x) => x.name === n); setEditForm((f) => ({ ...f, schedulerName: n, schedulerRole: s ? s.role : "" })); }}
+                                    className={inputCls + " bg-white"}>
+                                    <option value="">Selecione...</option>
+                                    <optgroup label="SDR">{TEAM.SDR.map((n) => <option key={n} value={n}>{n}</option>)}</optgroup>
+                                    <optgroup label="Social Seller">{TEAM["Social Seller"].map((n) => <option key={n} value={n}>{n}</option>)}</optgroup>
+                                  </select>
+                                </div>
+                                <div>
+                                  <label className={labelCls}>Nome do Cliente *</label>
+                                  <input type="text" value={editForm.clientName} onChange={(e) => setEF("clientName", e.target.value)} className={inputCls + " bg-white"} />
+                                </div>
+                                <div className="md:col-span-2">
+                                  <label className={labelCls}>WhatsApp do Cliente</label>
+                                  <div className="flex gap-2">
+                                    <select value={editForm.clientPhoneCountry} onChange={(e) => setEF("clientPhoneCountry", e.target.value)}
+                                      className="border border-gray-200 rounded-lg px-2 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500" style={{ maxWidth: 130 }}>
+                                      {COUNTRY_CODES.map((c, i) => <option key={i} value={c.code}>{c.label}</option>)}
+                                    </select>
+                                    <input type="tel" value={editForm.clientPhone} onChange={(e) => setEF("clientPhone", e.target.value)} className={inputCls + " bg-white flex-1"} />
+                                  </div>
+                                </div>
+                                <div>
+                                  <label className={labelCls}>Data do agendamento *</label>
+                                  <input type="date" value={editForm.bookingDate} onChange={(e) => setEF("bookingDate", e.target.value)} className={inputCls + " bg-white"} />
+                                </div>
+                                <div className="grid grid-cols-2 gap-3">
+                                  <div>
+                                    <label className={labelCls}>Data da reunião *</label>
+                                    <input type="date" value={editForm.date} onChange={(e) => setEF("date", e.target.value)} className={inputCls + " bg-white"} />
+                                  </div>
+                                  <div>
+                                    <label className={labelCls}>Horário *</label>
+                                    <input type="time" value={editForm.time} onChange={(e) => setEF("time", e.target.value)} className={inputCls + " bg-white"} />
+                                  </div>
+                                </div>
+                                <div className="md:col-span-2">
+                                  <label className={labelCls}>Observações</label>
+                                  <textarea value={editForm.notes} onChange={(e) => setEF("notes", e.target.value)} rows={2} className={inputCls + " bg-white"} style={{ resize: "vertical" }}></textarea>
+                                </div>
+                              </div>
+
+                              <div className="flex gap-2 mt-4">
+                                <button onClick={() => salvarEdicao(m)}
+                                  className="flex items-center gap-1.5 px-5 py-2 rounded-lg text-sm font-bold text-white"
+                                  style={{ background: "#1D4ED8", border: "none", cursor: "pointer" }}>
+                                  <IconCheck size={13} /> Salvar alterações
+                                </button>
+                                <button onClick={() => { setEditId(null); setEditForm(null); }}
+                                  className="px-5 py-2 rounded-lg text-sm font-semibold"
+                                  style={{ border: "1px solid #E5E7EB", color: "#6B7280", background: "#fff", cursor: "pointer" }}>
+                                  Cancelar
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                  {filtered.length === 0 && (
+                    <div className="bg-white rounded-xl shadow-sm py-20 text-center">
+                      <div style={{ fontSize: 48 }}>📭</div>
+                      <div className="text-gray-400 text-sm mt-3">Nenhum agendamento encontrado</div>
+                      <button onClick={() => setTab("agendar")} className="mt-3 text-sm font-bold underline" style={{ color: NAVY, background: "none", border: "none", cursor: "pointer" }}>Criar agendamento →</button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </main>
+        </div>
+      );
     }
-  }
 
-  return (
-    <div className="max-w-2xl mx-auto bg-white rounded-xl border border-slate-200 p-6">
-      <h2 className="text-lg font-bold mb-4" style={{ color: NAVY }}>Novo Agendamento</h2>
-
-      {okMsg && <div className="mb-4 bg-green-50 border border-green-200 text-green-700 text-sm rounded-lg p-3">Agendamento criado com sucesso!</div>}
-      {conflito && (
-        <div className="mb-4 bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg p-3">
-          ⚠️ Conflito de agenda: {conflito.closer} já tem "{conflito.cliente}" marcado em {fmtBR(conflito.dataReuniao)} às {conflito.horario}.
-          <button onClick={() => setConflito(null)} className="ml-2 underline">fechar</button>
-        </div>
-      )}
-
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <div className="grid grid-cols-2 gap-4">
-          <Field label="Tipo">
-            <select value={form.tipo} onChange={(e) => set("tipo", e.target.value)} className="input">
-              {TIPOS.map((t) => <option key={t}>{t}</option>)}
-            </select>
-          </Field>
-          <Field label="Cliente">
-            <input required value={form.cliente} onChange={(e) => set("cliente", e.target.value)} className="input" placeholder="Nome do cliente" />
-          </Field>
-        </div>
-
-        <div className="grid grid-cols-3 gap-4">
-          <Field label="DDI">
-            <select value={form.ddi} onChange={(e) => set("ddi", e.target.value)} className="input">
-              {DDI_LIST.map((d) => <option key={d.code} value={d.code}>{d.label}</option>)}
-            </select>
-          </Field>
-          <Field label="Telefone" className="col-span-2">
-            <input value={form.telefone} onChange={(e) => set("telefone", e.target.value)} className="input" placeholder="DDD + número" />
-          </Field>
-        </div>
-
-        <div className="grid grid-cols-2 gap-4">
-          <Field label="Agendador (SDR / Social Seller)">
-            <select value={form.agendador} onChange={(e) => set("agendador", e.target.value)} className="input">
-              {AGENDADORES.map((a) => <option key={a} value={a}>{a} — {AGENDADOR_FUNCAO[a]}</option>)}
-            </select>
-          </Field>
-          <Field label="Closer">
-            <select value={form.closer} onChange={(e) => set("closer", e.target.value)} className="input">
-              {CLOSERS.map((c) => <option key={c}>{c}</option>)}
-            </select>
-          </Field>
-        </div>
-
-        <div className="grid grid-cols-3 gap-4">
-          <Field label="Data do agendamento">
-            <input type="date" value={form.dataAgendamento} onChange={(e) => set("dataAgendamento", e.target.value)} className="input" />
-          </Field>
-          <Field label="Data da reunião">
-            <input required type="date" value={form.dataReuniao} onChange={(e) => set("dataReuniao", e.target.value)} className="input" />
-          </Field>
-          <Field label="Horário">
-            <input required type="time" value={form.horario} onChange={(e) => set("horario", e.target.value)} className="input" />
-          </Field>
-        </div>
-
-        <Field label="Observações">
-          <textarea value={form.observacoes} onChange={(e) => set("observacoes", e.target.value)} className="input" rows="3" placeholder="Opcional"></textarea>
-        </Field>
-
-        <button type="submit" disabled={saving} className="w-full py-2.5 rounded-md text-white font-semibold disabled:opacity-50" style={{ backgroundColor: NAVY }}>
-          {saving ? "Salvando…" : "Agendar"}
-        </button>
-      </form>
-      <style>{`.input { width: 100%; border: 1px solid #cbd5e1; border-radius: 6px; padding: 8px 10px; font-size: 14px; }`}</style>
-    </div>
-  );
-}
-
-function Field({ label, children, className }) {
-  return (
-    <div className={className}>
-      <label className="block text-xs font-medium text-slate-500 mb-1">{label}</label>
-      {children}
-    </div>
-  );
-}
-
-/* ================= AGENDA ================= */
-function Agenda({ meetings, onUpdate }) {
-  const [fTipo, setFTipo] = useState("");
-  const [fCloser, setFCloser] = useState("");
-  const [fStatus, setFStatus] = useState("");
-  const [fAgendador, setFAgendador] = useState("");
-  const [sort, setSort] = useState("asc");
-  const [reagendandoId, setReagendandoId] = useState(null);
-  const [editandoId, setEditandoId] = useState(null);
-
-  const filtrados = useMemo(() => {
-    let arr = meetings.filter((m) =>
-      (!fTipo || m.tipo === fTipo) &&
-      (!fCloser || m.closer === fCloser) &&
-      (!fStatus || m.status === fStatus) &&
-      (!fAgendador || m.agendador === fAgendador)
-    );
-    arr.sort((a, b) => {
-      const c = (a.dataReuniao || "").localeCompare(b.dataReuniao || "") || (a.horario || "").localeCompare(b.horario || "");
-      return sort === "asc" ? c : -c;
-    });
-    return arr;
-  }, [meetings, fTipo, fCloser, fStatus, fAgendador, sort]);
-
-  function exportarExcel() {
-    const rows = filtrados.map((m) => ({
-      "Data do agendamento": fmtBR(m.dataAgendamento),
-      "Data da reunião": fmtBR(m.dataReuniao),
-      "Horário": m.horario || "",
-      "Tipo": m.tipo || "",
-      "Cliente": m.cliente || "",
-      "Telefone": m.telefone || "",
-      "Agendador": m.agendador || "",
-      "Função": m.funcao || "",
-      "Closer": m.closer || "",
-      "Status": m.status || "",
-      "Reagendamentos": m.reagendamentos || 0,
-      "Observações": m.observacoes || "",
-    }));
-    const ws = XLSX.utils.json_to_sheet(rows);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Agendamentos");
-    const hoje = todayISO();
-    XLSX.writeFile(wb, `MMADV_Agendamentos_${hoje}.xlsx`);
-  }
-
-  return (
-    <div className="space-y-4">
-      <div className="bg-white rounded-xl border border-slate-200 p-4 flex flex-wrap gap-2 items-center">
-        <select value={fTipo} onChange={(e) => setFTipo(e.target.value)} className="filtro">
-          <option value="">Tipo (todos)</option>
-          {TIPOS.map((t) => <option key={t}>{t}</option>)}
-        </select>
-        <select value={fCloser} onChange={(e) => setFCloser(e.target.value)} className="filtro">
-          <option value="">Closer (todos)</option>
-          {CLOSERS.map((c) => <option key={c}>{c}</option>)}
-        </select>
-        <select value={fStatus} onChange={(e) => setFStatus(e.target.value)} className="filtro">
-          <option value="">Status (todos)</option>
-          {STATUS_LIST.map((s) => <option key={s}>{s}</option>)}
-        </select>
-        <select value={fAgendador} onChange={(e) => setFAgendador(e.target.value)} className="filtro">
-          <option value="">Agendador (todos)</option>
-          {AGENDADORES.map((a) => <option key={a}>{a}</option>)}
-        </select>
-        <select value={sort} onChange={(e) => setSort(e.target.value)} className="filtro">
-          <option value="asc">Data da reunião ↑</option>
-          <option value="desc">Data da reunião ↓</option>
-        </select>
-        <button onClick={exportarExcel} className="ml-auto px-3 py-1.5 rounded-md text-sm font-medium text-white" style={{ backgroundColor: GOLD }}>
-          ⬇️ Baixar Excel
-        </button>
-        <style>{`.filtro { border: 1px solid #cbd5e1; border-radius: 6px; padding: 6px 8px; font-size: 13px; }`}</style>
-      </div>
-
-      <div className="text-xs text-slate-500">{filtrados.length} agendamento(s) encontrado(s)</div>
-
-      <div className="space-y-3">
-        {filtrados.map((m) => (
-          <MeetingCard
-            key={m.id}
-            m={m}
-            meetings={meetings}
-            onUpdate={onUpdate}
-            reagendando={reagendandoId === m.id}
-            editando={editandoId === m.id}
-            onToggleReagendar={() => { setReagendandoId(reagendandoId === m.id ? null : m.id); setEditandoId(null); }}
-            onToggleEditar={() => { setEditandoId(editandoId === m.id ? null : m.id); setReagendandoId(null); }}
-          />
-        ))}
-        {filtrados.length === 0 && <div className="text-center py-12 text-slate-400 text-sm">Nenhum agendamento encontrado com esses filtros.</div>}
-      </div>
-    </div>
-  );
-}
-
-function MeetingCard({ m, meetings, onUpdate, reagendando, editando, onToggleReagendar, onToggleEditar }) {
-  const [novaData, setNovaData] = useState(m.dataReuniao);
-  const [novoHorario, setNovoHorario] = useState(m.horario);
-  const [erroReag, setErroReag] = useState(null);
-
-  const [editForm, setEditForm] = useState({ ...m });
-  useEffect(() => { setEditForm({ ...m }); }, [editando]);
-
-  async function confirmarReagendamento() {
-    const conflito = meetings.find(
-      (o) => o.id !== m.id && o.closer === m.closer && o.dataReuniao === novaData && o.horario === novoHorario && o.status !== "Cancelado"
-    );
-    if (conflito) { setErroReag(`${m.closer} já tem "${conflito.cliente}" nesse horário.`); return; }
-    await onUpdate(m.id, { dataReuniao: novaData, horario: novoHorario, status: "Agendado", reagendamentos: (m.reagendamentos || 0) + 1 });
-    setErroReag(null);
-    onToggleReagendar();
-  }
-
-  async function salvarEdicao() {
-    await onUpdate(m.id, {
-      tipo: editForm.tipo, cliente: editForm.cliente, telefone: editForm.telefone,
-      agendador: editForm.agendador, funcao: AGENDADOR_FUNCAO[editForm.agendador] || editForm.funcao,
-      closer: editForm.closer, dataAgendamento: editForm.dataAgendamento, dataReuniao: editForm.dataReuniao,
-      horario: editForm.horario, status: editForm.status, observacoes: editForm.observacoes,
-    });
-    onToggleEditar();
-  }
-
-  async function mudarStatus(novo) {
-    await onUpdate(m.id, { status: novo });
-  }
-
-  return (
-    <div className="bg-white rounded-xl border border-slate-200 p-4">
-      <div className="flex flex-wrap items-start justify-between gap-2">
-        <div>
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="font-semibold text-slate-800">{m.cliente}</span>
-            <span className={`text-xs px-2 py-0.5 rounded-full ${STATUS_COLORS[m.status] || "bg-slate-100 text-slate-600"}`}>{m.status}</span>
-            <span className="text-xs text-slate-400">{m.tipo}</span>
-            {m.reagendamentos > 0 && <span className="text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">🔄 Reagendado {m.reagendamentos}x</span>}
-          </div>
-          <div className="text-sm text-slate-500 mt-1">
-            📅 {fmtBR(m.dataReuniao)} às {m.horario} · Agendado em {fmtBR(m.dataAgendamento)}
-          </div>
-          <div className="text-sm text-slate-500">
-            👤 Closer: <b>{m.closer}</b> · Agendador: {m.agendador} ({m.funcao}) · 📞 {m.telefone}
-          </div>
-          {m.observacoes && <div className="text-sm text-slate-400 mt-1 italic">"{m.observacoes}"</div>}
-        </div>
-        <div className="flex gap-2 flex-wrap">
-          {STATUS_LIST.filter((s) => s !== m.status).map((s) => (
-            <button key={s} onClick={() => mudarStatus(s)} className="text-xs px-2 py-1 rounded-md border border-slate-300 hover:bg-slate-50">{s}</button>
-          ))}
-          <button onClick={onToggleReagendar} className="text-xs px-2 py-1 rounded-md border border-slate-300 hover:bg-slate-50">🔄 Reagendar</button>
-          <button onClick={onToggleEditar} className="text-xs px-2 py-1 rounded-md border border-slate-300 hover:bg-slate-50">✏️ Editar</button>
-        </div>
-      </div>
-
-      {reagendando && (
-        <div className="mt-3 p-3 bg-slate-50 rounded-lg flex flex-wrap items-end gap-3">
-          {erroReag && <div className="w-full text-sm text-red-600">⚠️ {erroReag}</div>}
-          <Field label="Nova data"><input type="date" value={novaData} onChange={(e) => setNovaData(e.target.value)} className="input" /></Field>
-          <Field label="Novo horário"><input type="time" value={novoHorario} onChange={(e) => setNovoHorario(e.target.value)} className="input" /></Field>
-          <button onClick={confirmarReagendamento} className="px-3 py-2 rounded-md text-white text-sm" style={{ backgroundColor: NAVY }}>Confirmar</button>
-          <button onClick={onToggleReagendar} className="px-3 py-2 rounded-md border border-slate-300 text-sm">Cancelar</button>
-        </div>
-      )}
-
-      {editando && (
-        <div className="mt-3 p-3 bg-slate-50 rounded-lg space-y-3">
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="Cliente"><input value={editForm.cliente} onChange={(e) => setEditForm({ ...editForm, cliente: e.target.value })} className="input" /></Field>
-            <Field label="Telefone"><input value={editForm.telefone} onChange={(e) => setEditForm({ ...editForm, telefone: e.target.value })} className="input" /></Field>
-          </div>
-          <div className="grid grid-cols-3 gap-3">
-            <Field label="Tipo">
-              <select value={editForm.tipo} onChange={(e) => setEditForm({ ...editForm, tipo: e.target.value })} className="input">
-                {TIPOS.map((t) => <option key={t}>{t}</option>)}
-              </select>
-            </Field>
-            <Field label="Agendador">
-              <select value={editForm.agendador} onChange={(e) => setEditForm({ ...editForm, agendador: e.target.value })} className="input">
-                {AGENDADORES.map((a) => <option key={a}>{a}</option>)}
-              </select>
-            </Field>
-            <Field label="Closer">
-              <select value={editForm.closer} onChange={(e) => setEditForm({ ...editForm, closer: e.target.value })} className="input">
-                {CLOSERS.map((c) => <option key={c}>{c}</option>)}
-              </select>
-            </Field>
-          </div>
-          <div className="grid grid-cols-3 gap-3">
-            <Field label="Data do agendamento"><input type="date" value={editForm.dataAgendamento} onChange={(e) => setEditForm({ ...editForm, dataAgendamento: e.target.value })} className="input" /></Field>
-            <Field label="Data da reunião"><input type="date" value={editForm.dataReuniao} onChange={(e) => setEditForm({ ...editForm, dataReuniao: e.target.value })} className="input" /></Field>
-            <Field label="Horário"><input type="time" value={editForm.horario} onChange={(e) => setEditForm({ ...editForm, horario: e.target.value })} className="input" /></Field>
-          </div>
-          <Field label="Status">
-            <select value={editForm.status} onChange={(e) => setEditForm({ ...editForm, status: e.target.value })} className="input">
-              {STATUS_LIST.map((s) => <option key={s}>{s}</option>)}
-            </select>
-          </Field>
-          <Field label="Observações"><textarea value={editForm.observacoes || ""} onChange={(e) => setEditForm({ ...editForm, observacoes: e.target.value })} className="input" rows="2"></textarea></Field>
-          <div className="flex gap-2">
-            <button onClick={salvarEdicao} className="px-3 py-2 rounded-md text-white text-sm" style={{ backgroundColor: NAVY }}>Salvar</button>
-            <button onClick={onToggleEditar} className="px-3 py-2 rounded-md border border-slate-300 text-sm">Cancelar</button>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-const root = ReactDOM.createRoot(document.getElementById("root"));
-root.render(<App />);
-</script>
+    ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+  </script>
 </body>
 </html>
