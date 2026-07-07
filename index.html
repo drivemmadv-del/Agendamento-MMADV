@@ -18,6 +18,7 @@
 
   <!-- Firebase -->
   <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore-compat.js"></script>
 
   <!-- SheetJS (exportação Excel) -->
@@ -46,6 +47,7 @@
     /* ═══════════════════════════════════════════════════════════════════ */
 
     firebase.initializeApp(firebaseConfig);
+    const auth = firebase.auth();
     const db = firebase.firestore();
 
     const { useState, useEffect } = React;
@@ -222,24 +224,36 @@
       const [editId, setEditId]     = useState(null);
       const [editForm, setEditForm] = useState(null);
 
-      // Listener em tempo real
+      // Login anônimo + listener em tempo real (só conecta ao Firestore após autenticar)
       useEffect(() => {
-        const unsub = db.collection("meetings").orderBy("createdAt", "desc").onSnapshot(
-          (snapshot) => {
-            const data = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
-            setMeetings(data);
-            setLoading(false);
-            setConnected(true);
-            setDbError(null);
-          },
-          (err) => {
-            console.error("Firebase error:", err);
-            setConnected(false);
-            setDbError("Não foi possível conectar ao banco. Verifique as credenciais do Firebase no topo do arquivo.");
-            setLoading(false);
+        let unsub = () => {};
+        const unsubAuth = auth.onAuthStateChanged((user) => {
+          if (user) {
+            unsub = db.collection("meetings").orderBy("createdAt", "desc").onSnapshot(
+              (snapshot) => {
+                const data = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+                setMeetings(data);
+                setLoading(false);
+                setConnected(true);
+                setDbError(null);
+              },
+              (err) => {
+                console.error("Firebase error:", err);
+                setConnected(false);
+                setDbError("Não foi possível conectar ao banco. Verifique as credenciais do Firebase no topo do arquivo.");
+                setLoading(false);
+              }
+            );
+          } else {
+            auth.signInAnonymously().catch((err) => {
+              console.error("Auth error:", err);
+              setConnected(false);
+              setDbError("Não foi possível autenticar. Verifique se o login Anônimo está habilitado em Firebase > Authentication > Sign-in method.");
+              setLoading(false);
+            });
           }
-        );
-        return () => unsub();
+        });
+        return () => { unsubAuth(); unsub(); };
       }, []);
 
       function setF(key, val) { setForm((f) => ({ ...f, [key]: val })); }
